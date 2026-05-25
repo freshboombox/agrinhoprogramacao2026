@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desafio Agrinho: Guardiões do Solo</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Adicionando uma fonte mais bonita do Google -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Tela Inicial -->
+        <div id="start-screen">
+            <h1>🌱 Desafio Agrinho</h1>
+            <h2>Guardiões do Solo: Missão Sustentabilidade</h2>
+            <p>Você foi convidado a gerenciar a "Fazenda do Futuro". Suas decisões definirão se o agronegócio pode ser forte e, ao mesmo tempo, proteger a natureza.</p>
+            <button class="btn btn-primary" onclick="startGame()">Iniciar Missão</button>
+        </div>
+
+        <!-- Tela do Jogo -->
+        <div id="game-screen" class="hidden">
+            <div class="header">
+                <div id="score-board">Reputação Verde: <span id="score">0</span> pts</div>
+                <div id="level-board">Nível: <span id="level-display">1</span>/5</div>
+            </div>
+
+            <!-- Barra de Progresso -->
+            <div class="progress-bar">
+                <div id="progress-fill"></div>
+            </div>
+
+            <div id="question-container">
+                <p id="question-text"></p>
+                <div id="options"></div>
+            </div>
+
+            <!-- Área de Feedback (O "Agrinho Explica") -->
+            <div id="feedback-container" class="hidden">
+                <h3 id="feedback-title"></h3>
+                <p id="feedback-text"></p>
+                <button class="btn btn-next" onclick="nextQuestion()">Avançar para a próxima etapa</button>
+            </div>
+        </div>
+
+        <!-- Tela de Fim de Jogo -->
+        <div id="result-screen" class="hidden">
+            <h1 id="final-title"></h1>
+            <p id="final-message"></p>
+            <div class="final-score-box">
+                <p>Sua Reputação Verde: <strong><span id="final-score"></span> pontos</strong></p>
+            </div>
+            <button class="btn btn-primary" onclick="restartGame()">Tentar Nova Estratégia</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
