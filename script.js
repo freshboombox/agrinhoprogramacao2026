@@ -2,7 +2,7 @@ const grid = document.getElementById("grid");
 
 const state = {
 
-  money:100,
+  money:250,
   food:0,
 
   drones:{
