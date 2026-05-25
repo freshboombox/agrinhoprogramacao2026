@@ -1,0 +1,172 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Nunito', sans-serif;
+    background: linear-gradient(135deg, #a8e063 0%, #56ab2f 100%);
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px;
+}
+
+#game-container {
+    background-color: white;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+h1 {
+    color: #2e7d32;
+    font-weight: 900;
+    margin-top: 0;
+}
+
+h2 {
+    color: #558b2f;
+    font-size: 1.2rem;
+}
+
+p {
+    line-height: 1.6;
+    font-size: 1.1rem;
+}
+
+/* Cabeçalho do jogo */
+.header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    font-weight: bold;
+    color: #2e7d32;
+}
+
+#score-board, #level-board {
+    background-color: #e8f5e9;
+    padding: 10px 15px;
+    border-radius: 8px;
+    border: 2px solid #81c784;
+}
+
+/* Barra de Progresso */
+.progress-bar {
+    width: 100%;
+    height: 10px;
+    background-color: #e0e0e0;
+    border-radius: 5px;
+    margin-bottom: 25px;
+    overflow: hidden;
+}
+
+#progress-fill {
+    height: 100%;
+    background-color: #4caf50;
+    width: 0%;
+    transition: width 0.5s ease-in-out;
+}
+
+/* Estilo da Pergunta */
+#question-text {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #1b5e20;
+    margin-bottom: 25px;
+}
+
+/* Botões */
+.btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    background-color: white;
+    color: #2e7d32;
+    border: 2px solid #4caf50;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    background-color: #4caf50;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 10px rgba(76, 175, 80, 0.3);
+}
+
+.btn-primary {
+    background-color: #2e7d32;
+    color: white;
+    border: none;
+    font-size: 1.2rem;
+    padding: 18px;
+    margin-top: 20px;
+}
+
+.btn-primary:hover {
+    background-color: #1b5e20;
+}
+
+.btn-next {
+    background-color: #fbc02d;
+    border: none;
+    color: #333;
+}
+
+.btn-next:hover {
+    background-color: #f57f17;
+}
+
+/* Classes dinâmicas para certo e errado */
+.correct {
+    background-color: #4caf50 !important;
+    color: white !important;
+    border-color: #4caf50 !important;
+}
+
+.wrong {
+    background-color: #f44336 !important;
+    color: white !important;
+    border-color: #f44336 !important;
+}
+
+/* Área de Explicação */
+#feedback-container {
+    margin-top: 25px;
+    padding: 20px;
+    border-radius: 10px;
+    background-color: #fff3e0;
+    border-left: 5px solid #ff9800;
+    text-align: left;
+}
+
+#feedback-title {
+    margin-top: 0;
+    color: #e65100;
+}
+
+/* Utilidade */
+.hidden {
+    display: none !important;
+}
+
+.final-score-box {
+    font-size: 1.5rem;
+    background-color: #e8f5e9;
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px 0;
+}
