@@ -44,10 +44,16 @@
       </section>
 
       <section class="card">
-        <h2>Upgrades</h2>
+        <h2>Upgrades & Expansão</h2>
         <button class="buy secondary" id="upgradeSpeed">Velocidade geral <span>$140</span></button>
         <button class="buy secondary" id="upgradeBattery">Bateria dos drones <span>$160</span></button>
         <button class="buy secondary" id="upgradeLuck">Eficiência da colheita <span>$180</span></button>
+        
+        <div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 10px;">
+          <h3 style="font-size: 14px; margin-bottom: 8px;">📍 Expansão de Fazenda</h3>
+          <button class="buy expand" id="expandFarm">Expandir área <span id="expandPrice">$200</span></button>
+          <div class="count">Tamanho: <strong id="gridSize">8x8</strong> tiles</div>
+        </div>
       </section>
 
       <section class="card logcard">
@@ -58,7 +64,7 @@
 
     <section class="gamewrap">
       <div class="hudline">
-        <div>Mapa 8x8</div>
+        <div>Mapa <strong id="gridSize">8x8</strong></div>
         <div>Drones vivos: <strong id="droneTotal">0</strong></div>
         <div>Produção: <strong id="productionRate">0</strong>/min</div>
       </div>
