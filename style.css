@@ -13,6 +13,7 @@
   --pest:#c35fff;
   --collector:#ffd166;
   --expand:#ff6b5b;
+  --charger:#ffb347;
   --shadow:0 16px 40px rgba(0,0,0,.28);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -97,6 +98,8 @@ body{
 .buy.secondary{background:linear-gradient(180deg, #7dbfff, #4e90e0);color:#08111b}
 .buy.expand{background:linear-gradient(180deg, #ff8c5a, #e85d3f);color:#1a0d0a}
 .buy.expand:hover{filter:saturate(1.08)}
+.buy.charger{background:linear-gradient(180deg, #ffcc80, #ffb347);color:#1a1a00}
+.buy.charger:hover{filter:saturate(1.08)}
 .count{
   font-size:12px;
   color:var(--muted);
@@ -177,6 +180,14 @@ body{
 .tile.planted{
   background:linear-gradient(180deg, rgba(64,123,48,.95), rgba(43,91,34,.95));
 }
+.tile.charger{
+  background:linear-gradient(180deg, rgba(255,179,71,.95), rgba(255,153,0,.95));
+  box-shadow:0 0 0 2px rgba(255,179,71,.4), inset 0 0 20px rgba(255,179,71,.15);
+}
+.tile.charger.active{
+  box-shadow:0 0 0 3px rgba(255,179,71,.6), inset 0 0 30px rgba(255,179,71,.25);
+  animation:chargeGlow 0.5s ease-in-out infinite;
+}
 .tile.watering{box-shadow:0 0 0 2px rgba(72,181,255,.35), inset 0 0 20px rgba(72,181,255,.12)}
 .tile.pest{box-shadow:0 0 0 2px rgba(195,95,255,.3), inset 0 0 20px rgba(195,95,255,.12)}
 .tile .stage{
@@ -184,6 +195,13 @@ body{
   left:10px;top:10px;
   font-size:18px;
   filter:drop-shadow(0 3px 6px rgba(0,0,0,.3));
+}
+.tile .charger-icon{
+  position:absolute;
+  left:50%;top:50%;
+  transform:translate(-50%, -50%);
+  font-size:24px;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));
 }
 .tile .meter{
   position:absolute;
@@ -222,6 +240,19 @@ body{
   transition:transform .22s linear, left .22s linear, top .22s linear, filter .22s ease;
   will-change:left, top, transform;
   animation:float 1.8s ease-in-out infinite;
+  pointer-events:auto;
+  cursor:grab;
+  user-select:none;
+}
+.drone:active{
+  cursor:grabbing;
+}
+.drone.selected{
+  transform:scale(1.15);
+  box-shadow:0 0 20px rgba(255,255,0,.6), 0 10px 20px rgba(0,0,0,.3);
+}
+.drone.charging{
+  animation:chargePulse 0.4s ease-in-out infinite;
 }
 .drone.planter{background:linear-gradient(180deg, #8ce36a, #4f9f39)}
 .drone.water{background:linear-gradient(180deg, #9ddcff, #4da5e8)}
@@ -229,6 +260,26 @@ body{
 .drone.collector{background:linear-gradient(180deg, #ffe08e, #efb94d)}
 .drone.busy{filter:brightness(1.12) saturate(1.08)}
 .drone.lowbattery{filter:grayscale(.3) brightness(.8)}
+.drone .battery-bar{
+  position:absolute;
+  top:-12px;
+  left:50%;
+  transform:translateX(-50%);
+  width:40px;
+  height:6px;
+  border-radius:999px;
+  background:rgba(0,0,0,.3);
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.2);
+}
+.drone .battery-bar i{
+  display:block;
+  height:100%;
+  width:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg, #4ade80, #fbbf24, #ef4444);
+  transition:width .15s linear;
+}
 .drone .pulse{
   position:absolute;
   inset:-4px;
@@ -238,6 +289,10 @@ body{
   animation:ping 1.2s ease-out infinite;
 }
 .drone.tasking .pulse{opacity:1}
+.drone .emoji{
+  position:relative;
+  z-index:2;
+}
 @keyframes float{
   0%,100%{transform:translateY(0)}
   50%{transform:translateY(-3px)}
@@ -245,6 +300,15 @@ body{
 @keyframes ping{
   0%{transform:scale(.85);opacity:.35}
   100%{transform:scale(1.2);opacity:0}
+}
+@keyframes chargeGlow{
+  0%{box-shadow:0 0 0 3px rgba(255,179,71,.4), inset 0 0 20px rgba(255,179,71,.15)}
+  50%{box-shadow:0 0 0 3px rgba(255,179,71,.8), inset 0 0 30px rgba(255,179,71,.3)}
+  100%{box-shadow:0 0 0 3px rgba(255,179,71,.4), inset 0 0 20px rgba(255,179,71,.15)}
+}
+@keyframes chargePulse{
+  0%,100%{filter:brightness(1)}
+  50%{filter:brightness(1.2)}
 }
 @media (max-width: 980px){
   body{overflow:auto}
