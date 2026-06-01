@@ -17,6 +17,7 @@ const elCountPlanter = document.getElementById('count-planter')
 const elCountWater = document.getElementById('count-water')
 const elCountPesticide = document.getElementById('count-pesticide')
 const elCountCollector = document.getElementById('count-collector')
+const elCountCharger = document.getElementById('count-charger')
 
 const btnUpgradeSpeed = document.getElementById('upgradeSpeed')
 const btnUpgradeBattery = document.getElementById('upgradeBattery')
@@ -40,10 +41,14 @@ const state = {
     water: 0,
     pesticide: 0,
     collector: 0,
+    charger: 0,
   },
   drones: [],
+  chargers: [],
   tiles: [],
   harvestLog: [],
+  selectedDrone: null,
+  mouseDown: false,
 }
 
 const prices = {
@@ -51,6 +56,7 @@ const prices = {
   water: 75,
   pesticide: 110,
   collector: 95,
+  charger: 120,
   speed: 140,
   battery: 160,
   luck: 180,
@@ -62,6 +68,7 @@ const emojis = {
   water: '💧',
   pesticide: '☠️',
   collector: '📦',
+  charger: '🔌',
 }
 
 const weatherPool = [
@@ -96,6 +103,10 @@ function log(text) {
 
 function getTileAt(x, y) {
   return state.tiles.find(t => t.x === x && t.y === y) || null
+}
+
+function getChargerAt(x, y) {
+  return state.chargers.find(c => c.x === x && c.y === y) || null
 }
 
 function getWeatherData() {
@@ -151,6 +162,13 @@ function updateTileVisual(tile) {
   }
 }
 
+function updateChargerVisual(charger) {
+  const el = charger.element
+  if (!el) return
+  
+  el.classList.toggle('active', charger.chargingDrone !== null)
+}
+
 function resetTile(tile) {
   tile.planted = false
   tile.growth = 0
@@ -164,6 +182,7 @@ function initFarm() {
 
   farmEl.innerHTML = ''
   state.tiles = []
+  state.chargers = []
 
   for (let y = 0; y < state.gridSize; y++) {
     for (let x = 0; x < state.gridSize; x++) {
@@ -194,6 +213,42 @@ function initFarm() {
   farmEl.style.gridTemplateRows = `repeat(${state.gridSize}, minmax(54px, 1fr))`
 }
 
+function spawnCharger(x, y) {
+  if (!farmEl) return
+
+  const tileEl = farmEl.querySelector(`[data-x="${x}"][data-y="${y}"]`)
+  if (!tileEl) return
+
+  const charger = {
+    x,
+    y,
+    chargingDrone: null,
+    element: tileEl,
+  }
+
+  tileEl.classList.add('charger')
+  tileEl.innerHTML = `
+    <span class="charger-icon">🔌</span>
+    <span class="meter"><i></i></span>
+  `
+
+  state.chargers.push(charger)
+  updateChargerVisual(charger)
+}
+
+function removeChargerAt(x, y) {
+  const idx = state.chargers.findIndex(c => c.x === x && c.y === y)
+  if (idx !== -1) {
+    const charger = state.chargers[idx]
+    charger.element.classList.remove('charger')
+    charger.element.innerHTML = `
+      <span class="stage"></span>
+      <span class="meter"><i></i></span>
+    `
+    state.chargers.splice(idx, 1)
+  }
+}
+
 function syncDronePosition(drone, snap = false) {
   if (!drone.element) return
   const pos = cellToPx(drone.x, drone.y)
@@ -213,6 +268,14 @@ function syncDronePosition(drone, snap = false) {
   drone.element.style.top = `${pos.top}px`
 }
 
+function updateDroneBattery(drone) {
+  if (!drone.element) return
+  const batteryBar = drone.element.querySelector('.battery-bar i')
+  if (batteryBar) {
+    batteryBar.style.width = `${clamp(drone.battery, 0, 100)}%`
+  }
+}
+
 function spawnDrone(type) {
   if (!dronesLayer) return
 
@@ -222,7 +285,11 @@ function spawnDrone(type) {
 
   const el = document.createElement('div')
   el.className = `drone ${type}`
-  el.innerHTML = `<span class="pulse"></span>${emojis[type]}`
+  el.innerHTML = `
+    <span class="battery-bar"><i></i></span>
+    <span class="pulse"></span>
+    <span class="emoji">${emojis[type]}</span>
+  `
 
   dronesLayer.appendChild(el)
 
@@ -241,6 +308,7 @@ function spawnDrone(type) {
 
   state.drones.push(drone)
   syncDronePosition(drone, true)
+  updateDroneBattery(drone)
 }
 
 function findBestTask(type) {
@@ -264,7 +332,6 @@ function findBestTask(type) {
 }
 
 function getRandomEmptyTile() {
-  // Seleciona apenas tiles vazios (não plantados) de forma aleatória
   const emptyTiles = state.tiles.filter(t => !t.planted)
   if (emptyTiles.length === 0) return null
   return emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
@@ -274,8 +341,6 @@ function pickTargetTile(drone) {
   const task = findBestTask(drone.type)
   if (task) return task
   
-  // Se não há tarefa específica, drone não fica preso - tenta tile vazio aleatório
-  // Isso evita que fique na fileira de cima
   return getRandomEmptyTile()
 }
 
@@ -353,6 +418,27 @@ function droneLoop() {
       drone.element.classList.toggle('lowbattery', drone.battery <= 12)
     }
 
+    // Verificar se está em uma estação de carregamento
+    const charger = getChargerAt(drone.x, drone.y)
+    if (charger && drone.battery < 100) {
+      charger.chargingDrone = drone.id
+      drone.battery = clamp(drone.battery + 0.12, 0, 100)
+      updateDroneBattery(drone)
+      updateChargerVisual(charger)
+      
+      if (drone.element) {
+        drone.element.classList.add('charging')
+      }
+      return
+    } else if (charger) {
+      charger.chargingDrone = null
+      updateChargerVisual(charger)
+    }
+
+    if (drone.element) {
+      drone.element.classList.remove('charging')
+    }
+
     const target = pickTargetTile(drone)
     if (!target) return
 
@@ -368,10 +454,12 @@ function droneLoop() {
 
     if (!atTarget) {
       moveDroneToward(drone, target.x, target.y)
+      updateDroneBattery(drone)
       return
     }
 
     drone.battery = clamp(drone.battery + 0.06, 0, 100)
+    updateDroneBattery(drone)
 
     if (drone.type === 'planter' && !target.planted && target.growth <= 0) {
       applyTileEffects(target, 'planter')
@@ -446,6 +534,7 @@ function updateUI() {
   safeText(elCountWater, state.droneCounts.water)
   safeText(elCountPesticide, state.droneCounts.pesticide)
   safeText(elCountCollector, state.droneCounts.collector)
+  safeText(elCountCharger, state.droneCounts.charger)
 
   if (btnUpgradeSpeed) btnUpgradeSpeed.disabled = state.money < prices.speed
   if (btnUpgradeBattery) btnUpgradeBattery.disabled = state.money < prices.battery
@@ -456,6 +545,16 @@ function updateUI() {
     const type = btn.dataset.buy
     btn.disabled = state.money < prices[type]
   })
+
+  // Atualizar preço de expansão
+  const expandBtn = document.getElementById('expandFarm')
+  if (expandBtn) {
+    expandBtn.disabled = state.money < prices.farmExpand || state.gridSize >= 16
+  }
+  const expandPrice = document.getElementById('expandPrice')
+  if (expandPrice) {
+    expandPrice.textContent = `$${Math.floor(prices.farmExpand)}`
+  }
 }
 
 function buyDrone(type) {
@@ -497,6 +596,57 @@ function expandFarm() {
   updateUI()
 }
 
+function placeCharger() {
+  const msg = `Digite as coordenadas da estação (ex: 0,0 para canto superior esquerdo). Máximo: ${state.gridSize - 1},${state.gridSize - 1}`
+  const input = prompt(msg)
+  
+  if (!input) return
+  
+  const coords = input.split(',').map(c => parseInt(c.trim()))
+  const [x, y] = coords
+  
+  if (isNaN(x) || isNaN(y) || x < 0 || y < 0 || x >= state.gridSize || y >= state.gridSize) {
+    log('❌ Coordenadas inválidas!')
+    return
+  }
+  
+  if (getChargerAt(x, y)) {
+    log('❌ Já existe uma estação aqui!')
+    return
+  }
+
+  if (state.money < prices.charger) {
+    log('❌ Dinheiro insuficiente!')
+    return
+  }
+  
+  state.money -= prices.charger
+  state.droneCounts.charger += 1
+  spawnCharger(x, y)
+  log(`Estação de carregamento colocada em ${x}, ${y}`)
+  updateUI()
+}
+
+function removeCharger() {
+  const msg = `Digite as coordenadas da estação a remover (ex: 0,0)`
+  const input = prompt(msg)
+  
+  if (!input) return
+  
+  const coords = input.split(',').map(c => parseInt(c.trim()))
+  const [x, y] = coords
+  
+  if (isNaN(x) || isNaN(y)) {
+    log('❌ Coordenadas inválidas!')
+    return
+  }
+  
+  removeChargerAt(x, y)
+  if (state.droneCounts.charger > 0) state.droneCounts.charger -= 1
+  log(`Estação de carregamento removida de ${x}, ${y}`)
+  updateUI()
+}
+
 function initEvents() {
   document.querySelectorAll('[data-buy]').forEach(btn => {
     btn.addEventListener('click', () => buyDrone(btn.dataset.buy))
@@ -506,6 +656,52 @@ function initEvents() {
   if (btnUpgradeBattery) btnUpgradeBattery.addEventListener('click', () => buyUpgrade('battery'))
   if (btnUpgradeLuck) btnUpgradeLuck.addEventListener('click', () => buyUpgrade('luck'))
   if (btnExpandFarm) btnExpandFarm.addEventListener('click', expandFarm)
+
+  const btnPlaceCharger = document.getElementById('placeCharger')
+  if (btnPlaceCharger) btnPlaceCharger.addEventListener('click', placeCharger)
+
+  const btnRemoveCharger = document.getElementById('removeCharger')
+  if (btnRemoveCharger) btnRemoveCharger.addEventListener('click', removeCharger)
+
+  // Eventos de mouse para carregar drones
+  if (dronesLayer) {
+    dronesLayer.addEventListener('mousedown', (e) => {
+      const droneEl = e.target.closest('.drone')
+      if (droneEl) {
+        const drone = state.drones.find(d => d.element === droneEl)
+        if (drone) {
+          state.selectedDrone = drone
+          state.mouseDown = true
+          if (drone.element) {
+            drone.element.classList.add('selected')
+          }
+        }
+      }
+    })
+
+    dronesLayer.addEventListener('mousemove', () => {
+      if (state.mouseDown && state.selectedDrone) {
+        state.selectedDrone.battery = clamp(state.selectedDrone.battery + 0.5, 0, 100)
+        updateDroneBattery(state.selectedDrone)
+      }
+    })
+
+    dronesLayer.addEventListener('mouseup', () => {
+      if (state.selectedDrone && state.selectedDrone.element) {
+        state.selectedDrone.element.classList.remove('selected')
+      }
+      state.selectedDrone = null
+      state.mouseDown = false
+    })
+
+    document.addEventListener('mouseleave', () => {
+      if (state.selectedDrone && state.selectedDrone.element) {
+        state.selectedDrone.element.classList.remove('selected')
+      }
+      state.selectedDrone = null
+      state.mouseDown = false
+    })
+  }
 }
 
 function seedStart() {
@@ -545,6 +741,7 @@ function initGame() {
 
   log('Fazenda ligada')
   log('Os drones já começaram a rodar')
+  log('💡 Clique e segure em um drone para carregá-lo!')
   updateUI()
 }
 
