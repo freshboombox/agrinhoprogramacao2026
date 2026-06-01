@@ -1,4 +1,3 @@
-const gridSize = 8
 const gap = 10
 let droneIdSeq = 1
 
@@ -12,6 +11,7 @@ const elFarmScore = document.getElementById('farmScore')
 const elDroneTotal = document.getElementById('droneTotal')
 const elProductionRate = document.getElementById('productionRate')
 const elWeather = document.getElementById('weather')
+const elGridSize = document.getElementById('gridSize')
 
 const elCountPlanter = document.getElementById('count-planter')
 const elCountWater = document.getElementById('count-water')
@@ -21,6 +21,7 @@ const elCountCollector = document.getElementById('count-collector')
 const btnUpgradeSpeed = document.getElementById('upgradeSpeed')
 const btnUpgradeBattery = document.getElementById('upgradeBattery')
 const btnUpgradeLuck = document.getElementById('upgradeLuck')
+const btnExpandFarm = document.getElementById('expandFarm')
 
 const state = {
   money: 100,
@@ -28,6 +29,7 @@ const state = {
   production: 0,
   weather: 'Calmo',
   weatherTick: 0,
+  gridSize: 8,
   upgrades: {
     speed: 0,
     battery: 0,
@@ -52,6 +54,7 @@ const prices = {
   speed: 140,
   battery: 160,
   luck: 180,
+  farmExpand: 200,
 }
 
 const emojis = {
@@ -105,8 +108,8 @@ function cellToPx(x, y) {
   const rect = farmEl.getBoundingClientRect()
   const innerW = Math.max(0, rect.width - 36)
   const innerH = Math.max(0, rect.height - 36)
-  const tileW = (innerW - gap * (gridSize - 1)) / gridSize
-  const tileH = (innerH - gap * (gridSize - 1)) / gridSize
+  const tileW = (innerW - gap * (state.gridSize - 1)) / state.gridSize
+  const tileH = (innerH - gap * (state.gridSize - 1)) / state.gridSize
 
   return {
     left: 18 + x * (tileW + gap) + tileW / 2,
@@ -162,8 +165,8 @@ function initFarm() {
   farmEl.innerHTML = ''
   state.tiles = []
 
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
+  for (let y = 0; y < state.gridSize; y++) {
+    for (let x = 0; x < state.gridSize; x++) {
       const tile = document.createElement('div')
       tile.className = 'tile empty'
       tile.dataset.x = x
@@ -185,6 +188,10 @@ function initFarm() {
       })
     }
   }
+
+  // Atualizar CSS grid
+  farmEl.style.gridTemplateColumns = `repeat(${state.gridSize}, minmax(54px, 1fr))`
+  farmEl.style.gridTemplateRows = `repeat(${state.gridSize}, minmax(54px, 1fr))`
 }
 
 function syncDronePosition(drone, snap = false) {
@@ -210,8 +217,8 @@ function spawnDrone(type) {
   if (!dronesLayer) return
 
   const id = droneIdSeq++
-  const startX = Math.floor(gridSize / 2)
-  const startY = Math.floor(gridSize / 2)
+  const startX = Math.floor(state.gridSize / 2)
+  const startY = Math.floor(state.gridSize / 2)
 
   const el = document.createElement('div')
   el.className = `drone ${type}`
@@ -256,10 +263,20 @@ function findBestTask(type) {
   return null
 }
 
+function getRandomEmptyTile() {
+  // Seleciona apenas tiles vazios (não plantados) de forma aleatória
+  const emptyTiles = state.tiles.filter(t => !t.planted)
+  if (emptyTiles.length === 0) return null
+  return emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
+}
+
 function pickTargetTile(drone) {
   const task = findBestTask(drone.type)
   if (task) return task
-  return state.tiles[Math.floor(Math.random() * state.tiles.length)] || null
+  
+  // Se não há tarefa específica, drone não fica preso - tenta tile vazio aleatório
+  // Isso evita que fique na fileira de cima
+  return getRandomEmptyTile()
 }
 
 function moveDroneToward(drone, tx, ty) {
@@ -423,6 +440,7 @@ function updateUI() {
   safeText(elDroneTotal, state.drones.length)
   safeText(elProductionRate, Math.max(0, Math.round(state.production)))
   safeText(elWeather, state.weather)
+  safeText(elGridSize, `${state.gridSize}x${state.gridSize}`)
 
   safeText(elCountPlanter, state.droneCounts.planter)
   safeText(elCountWater, state.droneCounts.water)
@@ -432,6 +450,7 @@ function updateUI() {
   if (btnUpgradeSpeed) btnUpgradeSpeed.disabled = state.money < prices.speed
   if (btnUpgradeBattery) btnUpgradeBattery.disabled = state.money < prices.battery
   if (btnUpgradeLuck) btnUpgradeLuck.disabled = state.money < prices.luck
+  if (btnExpandFarm) btnExpandFarm.disabled = state.money < prices.farmExpand || state.gridSize >= 16
 
   document.querySelectorAll('[data-buy]').forEach(btn => {
     const type = btn.dataset.buy
@@ -463,6 +482,21 @@ function buyUpgrade(type) {
   updateUI()
 }
 
+function expandFarm() {
+  const price = prices.farmExpand
+  if (state.money < price) return
+  if (state.gridSize >= 16) return
+
+  state.money -= price
+  state.gridSize += 2
+  prices.farmExpand = Math.floor(prices.farmExpand * 1.35)
+
+  log(`Fazenda expandida para ${state.gridSize}x${state.gridSize}!`)
+  initFarm()
+  resizeDrones()
+  updateUI()
+}
+
 function initEvents() {
   document.querySelectorAll('[data-buy]').forEach(btn => {
     btn.addEventListener('click', () => buyDrone(btn.dataset.buy))
@@ -471,6 +505,7 @@ function initEvents() {
   if (btnUpgradeSpeed) btnUpgradeSpeed.addEventListener('click', () => buyUpgrade('speed'))
   if (btnUpgradeBattery) btnUpgradeBattery.addEventListener('click', () => buyUpgrade('battery'))
   if (btnUpgradeLuck) btnUpgradeLuck.addEventListener('click', () => buyUpgrade('luck'))
+  if (btnExpandFarm) btnExpandFarm.addEventListener('click', expandFarm)
 }
 
 function seedStart() {
