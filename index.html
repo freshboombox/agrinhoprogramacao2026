@@ -1,104 +1,75 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DroneFarm</title>
-
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-<header>
-  <div class="stat">
-    <h2>DINHEIRO</h2>
-    <p id="money">100</p>
-  </div>
-
-  <div class="stat">
-    <h2>COMIDA</h2>
-    <p id="food">0</p>
-  </div>
-
-  <div class="stat">
-    <h2>EFICIÊNCIA</h2>
-    <p id="efficiency">0%</p>
-  </div>
-</header>
-
-<div class="container">
-
-  <aside class="sidebar">
-
-    <h1>🚁 DroneFarm</h1>
-
-    <div class="drone-card">
-      <h3>🌱 Drone Plantador</h3>
-      <p>Planta sementes automaticamente.</p>
-
-      <button onclick="buyDrone('planter')">
-        Comprar ($50)
-      </button>
-
-      <span>
-        Quantidade:
-        <span id="planterCount">0</span>
-      </span>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand__icon">🚁</div>
+      <div>
+        <h1>DroneFarm</h1>
+        <p>Organize drones, plante, irrigue, proteja e colha</p>
+      </div>
     </div>
 
-    <div class="drone-card">
-      <h3>💧 Drone Irrigador</h3>
-      <p>Acelera crescimento.</p>
-
-      <button onclick="buyDrone('water')">
-        Comprar ($75)
-      </button>
-
-      <span>
-        Quantidade:
-        <span id="waterCount">0</span>
-      </span>
+    <div class="stats">
+      <div class="stat"><span>Dinheiro</span><strong id="money">100</strong></div>
+      <div class="stat"><span>Comida</span><strong id="food">0</strong></div>
+      <div class="stat"><span>Fazenda</span><strong id="farmScore">0</strong></div>
+      <div class="stat"><span>Clima</span><strong id="weather">Calmo</strong></div>
     </div>
+  </header>
 
-    <div class="drone-card">
-      <h3>☠️ Drone AgroTóxico</h3>
-      <p>Protege as plantações.</p>
+  <main class="layout">
+    <aside class="panel">
+      <section class="card">
+        <h2>Loja de drones</h2>
+        <p>Compra mais unidades e deixa a cadeia girando.</p>
 
-      <button onclick="buyDrone('pesticide')">
-        Comprar ($120)
-      </button>
+        <button class="buy" data-buy="planter">Comprar plantador <span>$50</span></button>
+        <div class="count">Plantadores: <strong id="count-planter">0</strong></div>
 
-      <span>
-        Quantidade:
-        <span id="pesticideCount">0</span>
-      </span>
-    </div>
+        <button class="buy" data-buy="water">Comprar irrigador <span>$75</span></button>
+        <div class="count">Irrigadores: <strong id="count-water">0</strong></div>
 
-    <div class="drone-card">
-      <h3>📦 Drone Coletor</h3>
-      <p>Colhe automaticamente.</p>
+        <button class="buy" data-buy="pesticide">Comprar agrotoxico <span>$110</span></button>
+        <div class="count">Agrotoxico: <strong id="count-pesticide">0</strong></div>
 
-      <button onclick="buyDrone('collector')">
-        Comprar ($100)
-      </button>
+        <button class="buy" data-buy="collector">Comprar coletor <span>$95</span></button>
+        <div class="count">Coletores: <strong id="count-collector">0</strong></div>
+      </section>
 
-      <span>
-        Quantidade:
-        <span id="collectorCount">0</span>
-      </span>
-    </div>
+      <section class="card">
+        <h2>Upgrades</h2>
+        <button class="buy secondary" id="upgradeSpeed">Velocidade geral <span>$140</span></button>
+        <button class="buy secondary" id="upgradeBattery">Bateria dos drones <span>$160</span></button>
+        <button class="buy secondary" id="upgradeLuck">Eficiência da colheita <span>$180</span></button>
+      </section>
 
-    <div class="log" id="log"></div>
+      <section class="card logcard">
+        <h2>Log</h2>
+        <div id="log" class="log"></div>
+      </section>
+    </aside>
 
-  </aside>
+    <section class="gamewrap">
+      <div class="hudline">
+        <div>Mapa 8x8</div>
+        <div>Drones vivos: <strong id="droneTotal">0</strong></div>
+        <div>Produção: <strong id="productionRate">0</strong>/min</div>
+      </div>
 
-  <main class="game">
-    <div class="grid" id="grid"></div>
+      <div class="farm-shell">
+        <div id="farm" class="farm"></div>
+        <div id="dronesLayer" class="drones-layer"></div>
+      </div>
+    </section>
   </main>
 
-</div>
-
-<script src="script.js"></script>
-
+  <script src="script.js"></script>
 </body>
 </html>
