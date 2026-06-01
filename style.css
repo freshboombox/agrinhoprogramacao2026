@@ -180,6 +180,11 @@ body{
 .tile.planted{
   background:linear-gradient(180deg, rgba(64,123,48,.95), rgba(43,91,34,.95));
 }
+.tile.infested{
+  background:linear-gradient(180deg, rgba(139,69,19,.95), rgba(101,50,15,.95)) !important;
+  box-shadow:0 0 0 2px rgba(200,100,0,.4), inset 0 0 20px rgba(200,100,0,.15) !important;
+  animation:infestGlow 0.6s ease-in-out infinite;
+}
 .tile.charger{
   background:linear-gradient(180deg, rgba(255,179,71,.95), rgba(255,153,0,.95));
   box-shadow:0 0 0 2px rgba(255,179,71,.4), inset 0 0 20px rgba(255,179,71,.15);
@@ -189,12 +194,24 @@ body{
   animation:chargeGlow 0.5s ease-in-out infinite;
 }
 .tile.watering{box-shadow:0 0 0 2px rgba(72,181,255,.35), inset 0 0 20px rgba(72,181,255,.12)}
-.tile.pest{box-shadow:0 0 0 2px rgba(195,95,255,.3), inset 0 0 20px rgba(195,95,255,.12)}
+.tile.label{
+  position:absolute;
+  top:2px;
+  left:2px;
+  font-size:9px;
+  font-weight:bold;
+  color:rgba(255,255,255,.4);
+  z-index:1;
+}
 .tile .stage{
   position:absolute;
   left:10px;top:10px;
   font-size:18px;
   filter:drop-shadow(0 3px 6px rgba(0,0,0,.3));
+  animation:none;
+}
+.tile.infested .stage{
+  animation:pestWiggle 0.3s ease-in-out infinite;
 }
 .tile .charger-icon{
   position:absolute;
@@ -305,6 +322,16 @@ body{
   0%{box-shadow:0 0 0 3px rgba(255,179,71,.4), inset 0 0 20px rgba(255,179,71,.15)}
   50%{box-shadow:0 0 0 3px rgba(255,179,71,.8), inset 0 0 30px rgba(255,179,71,.3)}
   100%{box-shadow:0 0 0 3px rgba(255,179,71,.4), inset 0 0 20px rgba(255,179,71,.15)}
+}
+@keyframes infestGlow{
+  0%{box-shadow:0 0 0 2px rgba(200,100,0,.3), inset 0 0 15px rgba(200,100,0,.1)}
+  50%{box-shadow:0 0 0 2px rgba(200,100,0,.6), inset 0 0 25px rgba(200,100,0,.25)}
+  100%{box-shadow:0 0 0 2px rgba(200,100,0,.3), inset 0 0 15px rgba(200,100,0,.1)}
+}
+@keyframes pestWiggle{
+  0%,100%{transform:rotate(0deg)}
+  25%{transform:rotate(-2deg)}
+  75%{transform:rotate(2deg)}
 }
 @keyframes chargePulse{
   0%,100%{filter:brightness(1)}
