@@ -79,6 +79,20 @@ const weatherPool = [
   { name: 'Vento forte', growth: 0.98, pest: 1.2, water: 1.05 },
 ]
 
+// --- SISTEMA DE COORDENADAS PERSONALIZADO (a1b1) ---
+function getCoordStr(x, y) {
+  return `a${x + 1}b${y + 1}`
+}
+
+function parseCoordStr(str) {
+  const match = str.toLowerCase().trim().match(/^a(\d+)b(\d+)$/)
+  if (!match) return null
+  return {
+    x: parseInt(match[1]) - 1,
+    y: parseInt(match[2]) - 1,
+  }
+}
+
 function rand(min, max) {
   return Math.random() * (max - min) + min
 }
@@ -140,7 +154,7 @@ function updateTileVisual(tile) {
   el.classList.toggle('planted', tile.planted)
   el.classList.toggle('harvestable', tile.planted && tile.growth >= 100)
   el.classList.toggle('watering', tile.waterBoost > 0)
-  el.classList.toggle('pest', tile.pestShield > 0)
+  el.classList.toggle('infested', !!tile.infested) // Vinculado ao CSS .tile.infested
 
   if (!tile.planted) {
     el.classList.add('empty')
@@ -155,7 +169,8 @@ function updateTileVisual(tile) {
   if (meter) meter.style.width = `${pct}%`
 
   if (stage) {
-    if (tile.growth < 25) stage.textContent = '🌱'
+    if (tile.infested) stage.textContent = '🐛' // Emoji de praga ativa
+    else if (tile.growth < 25) stage.textContent = '🌱'
     else if (tile.growth < 55) stage.textContent = '🌿'
     else if (tile.growth < 100) stage.textContent = '🌾'
     else stage.textContent = '✅'
@@ -165,7 +180,6 @@ function updateTileVisual(tile) {
 function updateChargerVisual(charger) {
   const el = charger.element
   if (!el) return
-  
   el.classList.toggle('active', charger.chargingDrone !== null)
 }
 
@@ -174,6 +188,7 @@ function resetTile(tile) {
   tile.growth = 0
   tile.waterBoost = 0
   tile.pestShield = 0
+  tile.infested = false
   updateTileVisual(tile)
 }
 
@@ -190,7 +205,10 @@ function initFarm() {
       tile.className = 'tile empty'
       tile.dataset.x = x
       tile.dataset.y = y
+      
+      // Injeta a etiqueta visual de coordenadas com estilo absoluto direto
       tile.innerHTML = `
+        <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
         <span class="stage"></span>
         <span class="meter"><i></i></span>
       `
@@ -203,12 +221,12 @@ function initFarm() {
         waterBoost: 0,
         pestShield: 0,
         planted: false,
+        infested: false,
         element: tile,
       })
     }
   }
 
-  // Atualizar CSS grid
   farmEl.style.gridTemplateColumns = `repeat(${state.gridSize}, minmax(54px, 1fr))`
   farmEl.style.gridTemplateRows = `repeat(${state.gridSize}, minmax(54px, 1fr))`
 }
@@ -228,6 +246,7 @@ function spawnCharger(x, y) {
 
   tileEl.classList.add('charger')
   tileEl.innerHTML = `
+    <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
     <span class="charger-icon">🔌</span>
     <span class="meter"><i></i></span>
   `
@@ -242,6 +261,7 @@ function removeChargerAt(x, y) {
     const charger = state.chargers[idx]
     charger.element.classList.remove('charger')
     charger.element.innerHTML = `
+      <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
       <span class="stage"></span>
       <span class="meter"><i></i></span>
     `
@@ -304,6 +324,7 @@ function spawnDrone(type) {
     moveCooldown: 0,
     element: el,
     task: 'idle',
+    patrolTarget: null, // Evita engasgos e travamentos de rota
   }
 
   state.drones.push(drone)
@@ -317,31 +338,47 @@ function findBestTask(type) {
   }
 
   if (type === 'water') {
-    return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.waterBoost < 4) || null
+    return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.waterBoost < 4 && !t.infested) || null
   }
 
   if (type === 'pesticide') {
+    // 1. PRIORIDADE MÁXIMA: Tratar as plantas infectadas por pragas
+    const infestedTile = state.tiles.find(t => t.planted && t.infested)
+    if (infestedTile) return infestedTile
+
+    // 2. Secundário: Aplicar escudo preventivo comum
     return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.pestShield < 3) || null
   }
 
   if (type === 'collector') {
-    return state.tiles.find(t => t.planted && t.growth >= 100) || null
+    return state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested) || null
   }
 
   return null
 }
 
-function getRandomEmptyTile() {
-  const emptyTiles = state.tiles.filter(t => !t.planted)
-  if (emptyTiles.length === 0) return null
-  return emptyTiles[Math.floor(Math.random() * emptyTiles.length)]
-}
-
+// --- DRONES EM MOVIMENTO CONSTANTE (Patrulha quando ociosos) ---
 function pickTargetTile(drone) {
   const task = findBestTask(drone.type)
-  if (task) return task
+  if (task) {
+    drone.patrolTarget = null 
+    return task
+  }
   
-  return getRandomEmptyTile()
+  // Se já tem um destino de patrulha e não chegou lá, continua andando
+  if (drone.patrolTarget && (drone.x !== drone.patrolTarget.x || drone.y !== drone.patrolTarget.y)) {
+    const isStillValid = state.tiles.some(t => t.x === drone.patrolTarget.x && t.y === drone.patrolTarget.y)
+    if (isStillValid) return drone.patrolTarget
+  }
+
+  // Escolhe qualquer quadrante aleatório do mapa inteiro para se mover e orbitar de forma realista
+  if (state.tiles.length > 0) {
+    const randomTile = state.tiles[Math.floor(Math.random() * state.tiles.length)]
+    drone.patrolTarget = randomTile
+    return randomTile
+  }
+  
+  return null
 }
 
 function moveDroneToward(drone, tx, ty) {
@@ -371,22 +408,29 @@ function applyTileEffects(tile, type) {
     tile.growth = 1
     tile.waterBoost = 0
     tile.pestShield = 0
+    tile.infested = false
     updateTileVisual(tile)
-    log(`Plantio em ${tile.x}, ${tile.y}`)
+    log(`Plantio em ${getCoordStr(tile.x, tile.y)}`)
     return
   }
 
   if (type === 'water') {
     tile.waterBoost = Math.min(4, tile.waterBoost + 2)
     updateTileVisual(tile)
-    log(`Irrigação em ${tile.x}, ${tile.y}`)
+    log(`Irrigação em ${getCoordStr(tile.x, tile.y)}`)
     return
   }
 
   if (type === 'pesticide') {
-    tile.pestShield = Math.min(3, tile.pestShield + 2)
+    if (tile.infested) {
+      tile.infested = false
+      tile.pestShield = 3 // Dá proteção máxima imediata pós-cura
+      log(`✨ Praga eliminada em ${getCoordStr(tile.x, tile.y)}!`)
+    } else {
+      tile.pestShield = Math.min(3, tile.pestShield + 2)
+      log(`🛡️ Proteção em ${getCoordStr(tile.x, tile.y)}`)
+    }
     updateTileVisual(tile)
-    log(`Proteção em ${tile.x}, ${tile.y}`)
     return
   }
 
@@ -404,9 +448,10 @@ function applyTileEffects(tile, type) {
     tile.growth = 0
     tile.waterBoost = 0
     tile.pestShield = 0
+    tile.infested = false
     updateTileVisual(tile)
 
-    log(`Colheita feita. +$${payout}`)
+    log(`Colheita feita em ${getCoordStr(tile.x, tile.y)}. +$${payout}`)
   }
 }
 
@@ -418,7 +463,6 @@ function droneLoop() {
       drone.element.classList.toggle('lowbattery', drone.battery <= 12)
     }
 
-    // Verificar se está em uma estação de carregamento
     const charger = getChargerAt(drone.x, drone.y)
     if (charger && drone.battery < 100) {
       charger.chargingDrone = drone.id
@@ -469,7 +513,8 @@ function droneLoop() {
       applyTileEffects(target, 'water')
     }
 
-    if (drone.type === 'pesticide' && target.planted && target.growth > 0 && target.growth < 100) {
+    // Permite que o drone de agrotóxico atue se estiver infestado OU se precisar de escudo preventivo
+    if (drone.type === 'pesticide' && target.planted && (target.infested || (target.growth > 0 && target.growth < 100))) {
       applyTileEffects(target, 'pesticide')
     }
 
@@ -479,6 +524,7 @@ function droneLoop() {
   })
 }
 
+// --- SISTEMA DINÂMICO DE SURGIMENTO DE PRAGAS ---
 function cropLoop() {
   const weather = getWeatherData()
 
@@ -488,18 +534,26 @@ function cropLoop() {
       return
     }
 
-    const waterFactor = tile.waterBoost > 0 ? 1.18 : 1
-    const pestFactor = tile.pestShield > 0 ? 0.92 : 1.12
-    const growthSpeed = 0.12 * weather.growth * waterFactor * pestFactor
+    // Gerador de Pragas Aleatórias ao longo do tempo (Se planta cresce e não possui escudo protetor)
+    if (!tile.infested && tile.pestShield <= 0 && tile.growth > 5) {
+      if (Math.random() < 0.004 * weather.pest) { 
+        tile.infested = true
+        log(`⚠️ Praga detectada em ${getCoordStr(tile.x, tile.y)}! O progresso está caindo!`)
+      }
+    }
 
-    tile.growth = clamp(tile.growth + growthSpeed, 0, 100)
+    const waterFactor = tile.waterBoost > 0 ? 1.18 : 1
+    const growthSpeed = 0.12 * weather.growth * waterFactor
+
+    if (tile.infested) {
+      // Se estiver infestado, as pragas corroem e diminuem o progresso da barra
+      tile.growth = clamp(tile.growth - growthSpeed * 1.5, 0, 100)
+    } else {
+      tile.growth = clamp(tile.growth + growthSpeed, 0, 100)
+    }
+
     tile.waterBoost = Math.max(0, tile.waterBoost - 0.012 * weather.water)
     tile.pestShield = Math.max(0, tile.pestShield - 0.01 * weather.pest)
-
-    if (tile.growth >= 100 && tile.pestShield <= 0 && Math.random() < 0.0015 * weather.pest) {
-      tile.growth = 72
-      log(`Praga pegou o lote ${tile.x}, ${tile.y}`)
-    }
 
     updateTileVisual(tile)
   })
@@ -546,7 +600,6 @@ function updateUI() {
     btn.disabled = state.money < prices[type]
   })
 
-  // Atualizar preço de expansão
   const expandBtn = document.getElementById('expandFarm')
   if (expandBtn) {
     expandBtn.disabled = state.money < prices.farmExpand || state.gridSize >= 16
@@ -596,17 +649,22 @@ function expandFarm() {
   updateUI()
 }
 
+// --- INTEGRAÇÃO DO INPUT COM AS NOVAS COORDENADAS (a1b1) ---
 function placeCharger() {
-  const msg = `Digite as coordenadas da estação (ex: 0,0 para canto superior esquerdo). Máximo: ${state.gridSize - 1},${state.gridSize - 1}`
+  const msg = `Digite as coordenadas da estação usando letras (ex: a1b1 para canto superior esquerdo). Máximo: a${state.gridSize}b${state.gridSize}`
   const input = prompt(msg)
   
   if (!input) return
   
-  const coords = input.split(',').map(c => parseInt(c.trim()))
-  const [x, y] = coords
+  const coords = parseCoordStr(input)
+  if (!coords) {
+    log('❌ Formato inválido! Use o padrão de letras, ex: a2b3')
+    return
+  }
+  const { x, y } = coords
   
-  if (isNaN(x) || isNaN(y) || x < 0 || y < 0 || x >= state.gridSize || y >= state.gridSize) {
-    log('❌ Coordenadas inválidas!')
+  if (x < 0 || y < 0 || x >= state.gridSize || y >= state.gridSize) {
+    log('❌ Coordenadas fora do limite do mapa atual!')
     return
   }
   
@@ -623,28 +681,31 @@ function placeCharger() {
   state.money -= prices.charger
   state.droneCounts.charger += 1
   spawnCharger(x, y)
-  log(`Estação de carregamento colocada em ${x}, ${y}`)
+  log(`Estação colocada em ${getCoordStr(x, y)}`)
   updateUI()
 }
 
 function removeCharger() {
-  const msg = `Digite as coordenadas da estação a remover (ex: 0,0)`
+  const msg = `Digite as coordenadas da estação a remover (ex: a1b1)`
   const input = prompt(msg)
   
   if (!input) return
   
-  const coords = input.split(',').map(c => parseInt(c.trim()))
-  const [x, y] = coords
-  
-  if (isNaN(x) || isNaN(y)) {
-    log('❌ Coordenadas inválidas!')
+  const coords = parseCoordStr(input)
+  if (!coords) {
+    log('❌ Formato inválido! Use o padrão de letras, ex: a1b1')
     return
   }
+  const { x, y } = coords
   
-  removeChargerAt(x, y)
-  if (state.droneCounts.charger > 0) state.droneCounts.charger -= 1
-  log(`Estação de carregamento removida de ${x}, ${y}`)
-  updateUI()
+  if (getChargerAt(x, y)) {
+    removeChargerAt(x, y)
+    if (state.droneCounts.charger > 0) state.droneCounts.charger -= 1
+    log(`Estação removida de ${getCoordStr(x, y)}`)
+    updateUI()
+  } else {
+    log('❌ Nenhuma estação encontrada nessa posição.')
+  }
 }
 
 function initEvents() {
@@ -663,7 +724,6 @@ function initEvents() {
   const btnRemoveCharger = document.getElementById('removeCharger')
   if (btnRemoveCharger) btnRemoveCharger.addEventListener('click', removeCharger)
 
-  // Eventos de mouse para carregar drones
   if (dronesLayer) {
     dronesLayer.addEventListener('mousedown', (e) => {
       const droneEl = e.target.closest('.drone')
@@ -716,6 +776,7 @@ function seedStart() {
     tile.growth = rand(12, 28)
     tile.waterBoost = 0
     tile.pestShield = 0
+    tile.infested = false
     updateTileVisual(tile)
   }
 }
