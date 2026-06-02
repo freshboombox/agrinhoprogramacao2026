@@ -154,7 +154,7 @@ function updateTileVisual(tile) {
   el.classList.toggle('planted', tile.planted)
   el.classList.toggle('harvestable', tile.planted && tile.growth >= 100)
   el.classList.toggle('watering', tile.waterBoost > 0)
-  el.classList.toggle('infested', !!tile.infested) // Vinculado ao CSS .tile.infested
+  el.classList.toggle('infested', !!tile.infested) 
 
   if (!tile.planted) {
     el.classList.add('empty')
@@ -169,7 +169,7 @@ function updateTileVisual(tile) {
   if (meter) meter.style.width = `${pct}%`
 
   if (stage) {
-    if (tile.infested) stage.textContent = '🐛' // Emoji de praga ativa
+    if (tile.infested) stage.textContent = '🐛' 
     else if (tile.growth < 25) stage.textContent = '🌱'
     else if (tile.growth < 55) stage.textContent = '🌿'
     else if (tile.growth < 100) stage.textContent = '🌾'
@@ -206,7 +206,6 @@ function initFarm() {
       tile.dataset.x = x
       tile.dataset.y = y
       
-      // Injeta a etiqueta visual de coordenadas com estilo absoluto direto
       tile.innerHTML = `
         <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
         <span class="stage"></span>
@@ -324,7 +323,7 @@ function spawnDrone(type) {
     moveCooldown: 0,
     element: el,
     task: 'idle',
-    patrolTarget: null, // Evita engasgos e travamentos de rota
+    patrolTarget: null, 
   }
 
   state.drones.push(drone)
@@ -332,48 +331,68 @@ function spawnDrone(type) {
   updateDroneBattery(drone)
 }
 
-function findBestTask(type) {
+// --- BUSCA DE TAREFAS INDEPENDENTES (Evita acúmulo de drones no mesmo lugar) ---
+function findBestTask(type, currentDrone) {
+  // Retorna verdadeiro se OUTRO drone do mesmo tipo já marcou esse tile específico como destino de movimento
+  const isAlreadyTargeted = (t) => state.drones.some(d => 
+    d.id !== currentDrone.id && 
+    d.type === currentDrone.type && 
+    d.targetX === t.x && 
+    d.targetY === t.y
+  )
+
   if (type === 'planter') {
-    return state.tiles.find(t => !t.planted && t.growth <= 0) || null
+    return state.tiles.find(t => !t.planted && t.growth <= 0 && !isAlreadyTargeted(t)) ||
+           state.tiles.find(t => !t.planted && t.growth <= 0) || null
   }
 
   if (type === 'water') {
-    return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.waterBoost < 4 && !t.infested) || null
+    return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.waterBoost < 4 && !t.infested && !isAlreadyTargeted(t)) ||
+           state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.waterBoost < 4 && !t.infested) || null
   }
 
   if (type === 'pesticide') {
-    // 1. PRIORIDADE MÁXIMA: Tratar as plantas infectadas por pragas
-    const infestedTile = state.tiles.find(t => t.planted && t.infested)
-    if (infestedTile) return infestedTile
+    // 1. Prioridade máxima: Pragas ativas que nenhum outro drone de agrotóxico mirou
+    let target = state.tiles.find(t => t.planted && t.infested && !isAlreadyTargeted(t))
+    if (target) return target
 
-    // 2. Secundário: Aplicar escudo preventivo comum
+    // 2. Segunda prioridade: Ajudar em uma praga já mirada (se houver muitas pragas e poucos quadrantes)
+    target = state.tiles.find(t => t.planted && t.infested)
+    if (target) return target
+
+    // 3. Terceira prioridade: Aplicar escudos preventivos normais em locais livres de concorrência
+    target = state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.pestShield < 3 && !isAlreadyTargeted(t))
+    if (target) return target
+
+    // 4. Quarta prioridade: Escudos preventivos gerais
     return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.pestShield < 3) || null
   }
 
   if (type === 'collector') {
-    return state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested) || null
+    return state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested && !isAlreadyTargeted(t)) ||
+           state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested) || null
   }
 
   return null
 }
 
-// --- DRONES EM MOVIMENTO CONSTANTE (Patrulha quando ociosos) ---
 function pickTargetTile(drone) {
-  const task = findBestTask(drone.type)
+  const task = findBestTask(drone.type, drone)
   if (task) {
     drone.patrolTarget = null 
     return task
   }
   
-  // Se já tem um destino de patrulha e não chegou lá, continua andando
   if (drone.patrolTarget && (drone.x !== drone.patrolTarget.x || drone.y !== drone.patrolTarget.y)) {
     const isStillValid = state.tiles.some(t => t.x === drone.patrolTarget.x && t.y === drone.patrolTarget.y)
     if (isStillValid) return drone.patrolTarget
   }
 
-  // Escolhe qualquer quadrante aleatório do mapa inteiro para se mover e orbitar de forma realista
+  // Patrulha distribuída aleatoriamente para evitar que drones ociosos travem sobrepostos
   if (state.tiles.length > 0) {
-    const randomTile = state.tiles[Math.floor(Math.random() * state.tiles.length)]
+    const untargetedTiles = state.tiles.filter(t => !state.drones.some(d => d.id !== drone.id && d.targetX === t.x && d.targetY === t.y))
+    const pool = untargetedTiles.length > 0 ? untargetedTiles : state.tiles
+    const randomTile = pool[Math.floor(Math.random() * pool.length)]
     drone.patrolTarget = randomTile
     return randomTile
   }
@@ -424,7 +443,7 @@ function applyTileEffects(tile, type) {
   if (type === 'pesticide') {
     if (tile.infested) {
       tile.infested = false
-      tile.pestShield = 3 // Dá proteção máxima imediata pós-cura
+      tile.pestShield = 3 
       log(`✨ Praga eliminada em ${getCoordStr(tile.x, tile.y)}!`)
     } else {
       tile.pestShield = Math.min(3, tile.pestShield + 2)
@@ -513,7 +532,6 @@ function droneLoop() {
       applyTileEffects(target, 'water')
     }
 
-    // Permite que o drone de agrotóxico atue se estiver infestado OU se precisar de escudo preventivo
     if (drone.type === 'pesticide' && target.planted && (target.infested || (target.growth > 0 && target.growth < 100))) {
       applyTileEffects(target, 'pesticide')
     }
@@ -524,9 +542,15 @@ function droneLoop() {
   })
 }
 
-// --- SISTEMA DINÂMICO DE SURGIMENTO DE PRAGAS ---
+// --- SISTEMA DINÂMICO DE SURGIMENTO DE PRAGAS ESCALÁVEL ---
 function cropLoop() {
   const weather = getWeatherData()
+
+  // Calcula o total de upgrades comprados pelo jogador para medir o avanço dele
+  const totalUpgrades = state.upgrades.speed + state.upgrades.battery + state.upgrades.luck
+  
+  // No começo (0 upgrades), a chance é mínima (0.0005). A cada upgrade ela aumenta em 0.0015
+  const dynamicPestChance = 0.0005 + (totalUpgrades * 0.0015)
 
   state.tiles.forEach(tile => {
     if (!tile.planted) {
@@ -534,9 +558,9 @@ function cropLoop() {
       return
     }
 
-    // Gerador de Pragas Aleatórias ao longo do tempo (Se planta cresce e não possui escudo protetor)
+    // Gerador de Pragas Aleatórias Dinâmico baseado nas melhorias do jogador
     if (!tile.infested && tile.pestShield <= 0 && tile.growth > 5) {
-      if (Math.random() < 0.004 * weather.pest) { 
+      if (Math.random() < dynamicPestChance * weather.pest) { 
         tile.infested = true
         log(`⚠️ Praga detectada em ${getCoordStr(tile.x, tile.y)}! O progresso está caindo!`)
       }
@@ -546,7 +570,7 @@ function cropLoop() {
     const growthSpeed = 0.12 * weather.growth * waterFactor
 
     if (tile.infested) {
-      // Se estiver infestado, as pragas corroem e diminuem o progresso da barra
+      // Se infectada, a barra de progresso diminui ao invés de aumentar
       tile.growth = clamp(tile.growth - growthSpeed * 1.5, 0, 100)
     } else {
       tile.growth = clamp(tile.growth + growthSpeed, 0, 100)
@@ -649,7 +673,6 @@ function expandFarm() {
   updateUI()
 }
 
-// --- INTEGRAÇÃO DO INPUT COM AS NOVAS COORDENADAS (a1b1) ---
 function placeCharger() {
   const msg = `Digite as coordenadas da estação usando letras (ex: a1b1 para canto superior esquerdo). Máximo: a${state.gridSize}b${state.gridSize}`
   const input = prompt(msg)
