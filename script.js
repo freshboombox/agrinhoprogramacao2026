@@ -148,14 +148,14 @@ function cellToPx(x, y) {
   if (!farmEl) return { left: 0, top: 0, tileW: 0, tileH: 0 }
 
   const rect = farmEl.getBoundingClientRect()
-  const innerW = Math.max(0, rect.width - 36)
-  const innerH = Math.max(0, rect.height - 36)
+  const innerW = Math.max(0, rect.width - 30)
+  const innerH = Math.max(0, rect.height - 30)
   const tileW = (innerW - gap * (state.gridSize - 1)) / state.gridSize
   const tileH = (innerH - gap * (state.gridSize - 1)) / state.gridSize
 
   return {
-    left: 18 + x * (tileW + gap) + tileW / 2,
-    top: 18 + y * (tileH + gap) + tileH / 2,
+    left: 15 + x * (tileW + gap) + tileW / 2,
+    top: 15 + y * (tileH + gap) + tileH / 2,
     tileW,
     tileH,
   }
@@ -202,11 +202,10 @@ function updateChargerVisual(charger) {
 function updateRefineryVisual(refinery) {
   const el = refinery.element
   if (!el) return
-  el.classList.toggle('active', refinery.buffer > 0)
   el.innerHTML = `
-    <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(refinery.x, refinery.y)}</span>
-    <span class="charger-icon">🏭</span>
-    <span style="position:absolute; bottom:4px; right:6px; font-size:10px; font-weight:bold; color:#ff9f43; background:rgba(0,0,0,0.7); padding:1px 5px; border-radius:3px; z-index:2;">In: ${refinery.buffer}</span>
+    <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.4); z-index:1; pointer-events:none;">${getCoordStr(refinery.x, refinery.y)}</span>
+    <span>🏭</span>
+    <span style="position:absolute; bottom:4px; right:6px; font-size:10px; font-weight:bold; color:#fff; background:rgba(0,0,0,0.5); padding:1px 4px; border-radius:3px; z-index:2;">In: ${refinery.buffer}</span>
   `
 }
 
@@ -265,8 +264,8 @@ function spawnCharger(x, y) {
 
   tileEl.className = 'tile charger'
   tileEl.innerHTML = `
-    <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
-    <span class="charger-icon">🔌</span>
+    <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.4); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
+    <span>🔌</span>
     <span class="meter"><i></i></span>
   `
 
@@ -278,7 +277,7 @@ function removeChargerAt(x, y) {
   const idx = state.chargers.findIndex(c => c.x === x && c.y === y)
   if (idx !== -1) {
     const charger = state.chargers[idx]
-    charger.element.classList.remove('charger')
+    charger.element.className = 'tile empty'
     charger.element.innerHTML = `
       <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
       <span class="stage"></span>
@@ -359,7 +358,6 @@ function spawnDrone(type) {
   el.className = `drone ${type}`
   el.innerHTML = `
     <span class="battery-bar"><i></i></span>
-    <span class="pulse"></span>
     <span class="emoji">${emojis[type]}</span>
   `
 
@@ -503,10 +501,10 @@ function applyTileEffects(tile, drone) {
     if (tile.infested) {
       tile.infested = false
       tile.pestShield = 3 
-      log(`✨ Praga eliminada em ${getCoordStr(tile.x, tile.y)}!`)
+      log(`Praga eliminada em ${getCoordStr(tile.x, tile.y)}!`)
     } else {
       tile.pestShield = Math.min(3, tile.pestShield + 2)
-      log(`🛡️ Proteção em ${getCoordStr(tile.x, tile.y)}`)
+      log(`Proteção em ${getCoordStr(tile.x, tile.y)}`)
     }
     updateTileVisual(tile)
     return
@@ -520,7 +518,7 @@ function applyTileEffects(tile, drone) {
     tile.pestShield = 0
     tile.infested = false
     updateTileVisual(tile)
-    log(`📦 Coletor extraiu matéria-prima em ${getCoordStr(tile.x, tile.y)}. Buscando Refinaria...`)
+    log(`Coletor extraiu matéria-prima em ${getCoordStr(tile.x, tile.y)}. Buscando Refinaria...`)
   }
 }
 
@@ -538,29 +536,18 @@ function droneLoop() {
       drone.battery = clamp(drone.battery + 0.12, 0, 100)
       updateDroneBattery(drone)
       updateChargerVisual(charger)
-      if (drone.element) drone.element.classList.add('charging')
       return
     } else if (charger) {
       charger.chargingDrone = null
       updateChargerVisual(charger)
     }
 
-    if (drone.element) drone.element.classList.remove('charging')
-
     const target = pickTargetTile(drone)
-    if (!target) {
-      if (drone.element) drone.element.classList.remove('busy', 'tasking')
-      return
-    }
+    if (!target) return
 
     drone.targetX = target.x
     drone.targetY = target.y
     const atTarget = drone.x === target.x && drone.y === target.y
-
-    if (drone.element) {
-      drone.element.classList.toggle('busy', !atTarget)
-      drone.element.classList.toggle('tasking', atTarget)
-    }
 
     if (!atTarget) {
       moveDroneToward(drone, target.x, target.y)
@@ -589,7 +576,7 @@ function droneLoop() {
           refinery.buffer += 1
           drone.carrying = false
           updateRefineryVisual(refinery)
-          log(`🏭 Depósito feito! Fábrica ${getCoordStr(refinery.x, refinery.y)} recebeu insumos brutos.`)
+          log(`Depósito feito! Fábrica ${getCoordStr(refinery.x, refinery.y)} recebeu insumos.`)
         }
       }
     }
@@ -612,7 +599,7 @@ function cropLoop() {
     if (!tile.infested && tile.pestShield <= 0 && tile.growth > 5) {
       if (Math.random() < dynamicPestChance * weather.pest) { 
         tile.infested = true
-        log(`⚠️ Praga detectada em ${getCoordStr(tile.x, tile.y)}!`)
+        log(`Praga detectada em ${getCoordStr(tile.x, tile.y)}!`)
       }
     }
 
@@ -648,7 +635,7 @@ function refineryProcessingLoop() {
       state.harvestLog.push(performance.now())
 
       updateRefineryVisual(ref)
-      log(`🥫 Processador produziu: Alimento Manufaturado! +$${payout}`)
+      log(`Fábrica processou alimento! +$${payout}`)
     }
   })
 }
@@ -685,12 +672,24 @@ function updateUI() {
   safeText(elCountCharger, state.droneCounts.charger)
   safeText(elCountRefinery, state.droneCounts.refinery)
 
-  if (btnUpgradeSpeed) btnUpgradeSpeed.disabled = state.money < prices.speed
-  if (btnUpgradeBattery) btnUpgradeBattery.disabled = state.money < prices.battery
-  if (btnUpgradeLuck) btnUpgradeLuck.disabled = state.money < prices.luck
+  if (btnUpgradeSpeed) {
+    btnUpgradeSpeed.disabled = state.money < prices.speed
+    btnUpgradeSpeed.innerHTML = `⚡ Upgrade Velocidade ($${prices.speed})`
+  }
+  if (btnUpgradeBattery) {
+    btnUpgradeBattery.disabled = state.money < prices.battery
+    btnUpgradeBattery.innerHTML = `🔋 Upgrade Bateria ($${prices.battery})`
+  }
+  if (btnUpgradeLuck) {
+    btnUpgradeLuck.disabled = state.money < prices.luck
+    btnUpgradeLuck.innerHTML = `🍀 Upgrade Sorte ($${prices.luck})`
+  }
   
   const btnPlaceRefinery = document.getElementById('placeRefinery')
-  if (btnPlaceRefinery) btnPlaceRefinery.disabled = state.money < prices.refinery
+  if (btnPlaceRefinery) {
+    btnPlaceRefinery.disabled = state.money < prices.refinery
+    btnPlaceRefinery.innerHTML = `⚙️ Criar Refinaria ($${prices.refinery})`
+  }
   if (btnExpandFarm) btnExpandFarm.disabled = state.money < prices.farmExpand || state.gridSize >= 16
 
   document.querySelectorAll('[data-buy]').forEach(btn => {
@@ -711,12 +710,12 @@ function buyDrone(type) {
   updateUI()
 }
 
-// ... (Funções de Upgrade e Expansão continuam iguais e limpas)
 function buyUpgrade(type) {
   const price = prices[type]
   if (state.money < price) return
   state.money -= price
   state.upgrades[type] += 1
+  prices[type] = Math.floor(prices[type] * 1.45)
   log(`Upgrade de ${type} aplicado`)
   updateUI()
 }
@@ -757,7 +756,7 @@ function removeCharger() {
 function placeRefinery() {
   const input = prompt(`Coordenadas da Refinaria (ex: a1b1). Limite: a${state.gridSize}b${state.gridSize}`)
   const coords = parseCoordStr(input)
-  if (!coords) { log('❌ Coordenadas inválidas!'); return }
+  if (!coords) { log('Coordenadas inválidas!'); return }
   const { x, y } = coords
   
   if (x < 0 || y < 0 || x >= state.gridSize || y >= state.gridSize) return
@@ -771,7 +770,7 @@ function placeRefinery() {
   if (tile) { tile.planted = false; tile.growth = 0; }
   
   spawnRefinery(x, y)
-  log(`⚙️ Refinaria instalada e ativa no quadrante ${getCoordStr(x, y)}`)
+  log(`Refinaria instalada no quadrante ${getCoordStr(x, y)}`)
   updateUI()
 }
 
@@ -804,7 +803,6 @@ function initEvents() {
   const btnRemoveCharger = document.getElementById('removeCharger')
   if (btnRemoveCharger) btnRemoveCharger.addEventListener('click', removeCharger)
 
-  // Seletores nativos agora que os elementos estão no HTML de verdade!
   const btnPlaceRefinery = document.getElementById('placeRefinery')
   if (btnPlaceRefinery) btnPlaceRefinery.addEventListener('click', placeRefinery)
 
@@ -872,7 +870,7 @@ function initGame() {
   state.droneCounts.collector = 1
   state.droneCounts.pesticide = 1
 
-  log('Fazenda industrializada com sucesso.')
+  log('Fazenda iniciada com sucesso.')
   updateUI()
 }
 
