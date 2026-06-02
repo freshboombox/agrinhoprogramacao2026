@@ -18,6 +18,7 @@ const elCountWater = document.getElementById('count-water')
 const elCountPesticide = document.getElementById('count-pesticide')
 const elCountCollector = document.getElementById('count-collector')
 const elCountCharger = document.getElementById('count-charger')
+const elCountRefinery = document.getElementById('count-refinery')
 
 const btnUpgradeSpeed = document.getElementById('upgradeSpeed')
 const btnUpgradeBattery = document.getElementById('upgradeBattery')
@@ -42,9 +43,12 @@ const state = {
     pesticide: 0,
     collector: 0,
     charger: 0,
+    refinery: 0,
   },
   drones: [],
   chargers: [],
+  refineries: [], 
+  refineryTick: 0,
   tiles: [],
   harvestLog: [],
   selectedDrone: null,
@@ -57,6 +61,7 @@ const prices = {
   pesticide: 110,
   collector: 95,
   charger: 120,
+  refinery: 150, 
   speed: 140,
   battery: 160,
   luck: 180,
@@ -79,7 +84,6 @@ const weatherPool = [
   { name: 'Vento forte', growth: 0.98, pest: 1.2, water: 1.05 },
 ]
 
-// --- SISTEMA DE COORDENADAS PERSONALIZADO (a1b1) ---
 function getCoordStr(x, y) {
   return `a${x + 1}b${y + 1}`
 }
@@ -123,6 +127,19 @@ function getChargerAt(x, y) {
   return state.chargers.find(c => c.x === x && c.y === y) || null
 }
 
+function getRefineryAt(x, y) {
+  return state.refineries.find(r => r.x === x && r.y === y) || null
+}
+
+function findClosestRefinery(drone) {
+  if (state.refineries.length === 0) return null
+  return state.refineries.reduce((closest, ref) => {
+    const distCurrent = Math.abs(ref.x - drone.x) + Math.abs(ref.y - drone.y)
+    const distClosest = Math.abs(closest.x - drone.x) + Math.abs(closest.y - drone.y)
+    return distCurrent < distClosest ? ref : closest
+  })
+}
+
 function getWeatherData() {
   return weatherPool.find(w => w.name === state.weather) || weatherPool[0]
 }
@@ -146,7 +163,7 @@ function cellToPx(x, y) {
 
 function updateTileVisual(tile) {
   const el = tile.element
-  if (!el) return
+  if (!el || el.classList.contains('charger') || el.classList.contains('refinery-tile')) return
 
   const stage = el.querySelector('.stage')
   const meter = el.querySelector('.meter i')
@@ -164,7 +181,6 @@ function updateTileVisual(tile) {
   }
 
   el.classList.remove('empty')
-
   const pct = clamp(tile.growth, 0, 100)
   if (meter) meter.style.width = `${pct}%`
 
@@ -183,13 +199,15 @@ function updateChargerVisual(charger) {
   el.classList.toggle('active', charger.chargingDrone !== null)
 }
 
-function resetTile(tile) {
-  tile.planted = false
-  tile.growth = 0
-  tile.waterBoost = 0
-  tile.pestShield = 0
-  tile.infested = false
-  updateTileVisual(tile)
+function updateRefineryVisual(refinery) {
+  const el = refinery.element
+  if (!el) return
+  el.classList.toggle('active', refinery.buffer > 0)
+  el.innerHTML = `
+    <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(refinery.x, refinery.y)}</span>
+    <span class="charger-icon">🏭</span>
+    <span style="position:absolute; bottom:4px; right:6px; font-size:10px; font-weight:bold; color:#ff9f43; background:rgba(0,0,0,0.7); padding:1px 5px; border-radius:3px; z-index:2;">In: ${refinery.buffer}</span>
+  `
 }
 
 function initFarm() {
@@ -198,6 +216,7 @@ function initFarm() {
   farmEl.innerHTML = ''
   state.tiles = []
   state.chargers = []
+  state.refineries = [] 
 
   for (let y = 0; y < state.gridSize; y++) {
     for (let x = 0; x < state.gridSize; x++) {
@@ -232,6 +251,7 @@ function initFarm() {
 
 function spawnCharger(x, y) {
   if (!farmEl) return
+  removeRefineryAt(x, y) 
 
   const tileEl = farmEl.querySelector(`[data-x="${x}"][data-y="${y}"]`)
   if (!tileEl) return
@@ -243,7 +263,7 @@ function spawnCharger(x, y) {
     element: tileEl,
   }
 
-  tileEl.classList.add('charger')
+  tileEl.className = 'tile charger'
   tileEl.innerHTML = `
     <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
     <span class="charger-icon">🔌</span>
@@ -265,6 +285,39 @@ function removeChargerAt(x, y) {
       <span class="meter"><i></i></span>
     `
     state.chargers.splice(idx, 1)
+  }
+}
+
+function spawnRefinery(x, y) {
+  if (!farmEl) return
+  removeChargerAt(x, y) 
+
+  const tileEl = farmEl.querySelector(`[data-x="${x}"][data-y="${y}"]`)
+  if (!tileEl) return
+
+  const refinery = {
+    x,
+    y,
+    buffer: 0,
+    element: tileEl,
+  }
+
+  tileEl.className = 'tile refinery-tile'
+  state.refineries.push(refinery)
+  updateRefineryVisual(refinery)
+}
+
+function removeRefineryAt(x, y) {
+  const idx = state.refineries.findIndex(r => r.x === x && r.y === y)
+  if (idx !== -1) {
+    const ref = state.refineries[idx]
+    ref.element.className = 'tile empty'
+    ref.element.innerHTML = `
+      <span style="position:absolute; top:4px; left:6px; font-size:9px; font-weight:bold; color:rgba(255,255,255,0.25); z-index:1; pointer-events:none;">${getCoordStr(x, y)}</span>
+      <span class="stage"></span>
+      <span class="meter"><i></i></span>
+    `
+    state.refineries.splice(idx, 1)
   }
 }
 
@@ -324,6 +377,7 @@ function spawnDrone(type) {
     element: el,
     task: 'idle',
     patrolTarget: null, 
+    carrying: false,
   }
 
   state.drones.push(drone)
@@ -331,9 +385,7 @@ function spawnDrone(type) {
   updateDroneBattery(drone)
 }
 
-// --- BUSCA DE TAREFAS INDEPENDENTES (Evita acúmulo de drones no mesmo lugar) ---
 function findBestTask(type, currentDrone) {
-  // Retorna verdadeiro se OUTRO drone do mesmo tipo já marcou esse tile específico como destino de movimento
   const isAlreadyTargeted = (t) => state.drones.some(d => 
     d.id !== currentDrone.id && 
     d.type === currentDrone.type && 
@@ -342,8 +394,8 @@ function findBestTask(type, currentDrone) {
   )
 
   if (type === 'planter') {
-    return state.tiles.find(t => !t.planted && t.growth <= 0 && !isAlreadyTargeted(t)) ||
-           state.tiles.find(t => !t.planted && t.growth <= 0) || null
+    return state.tiles.find(t => !t.planted && t.growth <= 0 && !getChargerAt(t.x, t.y) && !getRefineryAt(t.x, t.y) && !isAlreadyTargeted(t)) ||
+           state.tiles.find(t => !t.planted && t.growth <= 0 && !getChargerAt(t.x, t.y) && !getRefineryAt(t.x, t.y)) || null
   }
 
   if (type === 'water') {
@@ -352,23 +404,22 @@ function findBestTask(type, currentDrone) {
   }
 
   if (type === 'pesticide') {
-    // 1. Prioridade máxima: Pragas ativas que nenhum outro drone de agrotóxico mirou
     let target = state.tiles.find(t => t.planted && t.infested && !isAlreadyTargeted(t))
     if (target) return target
 
-    // 2. Segunda prioridade: Ajudar em uma praga já mirada (se houver muitas pragas e poucos quadrantes)
     target = state.tiles.find(t => t.planted && t.infested)
     if (target) return target
 
-    // 3. Terceira prioridade: Aplicar escudos preventivos normais em locais livres de concorrência
     target = state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.pestShield < 3 && !isAlreadyTargeted(t))
     if (target) return target
 
-    // 4. Quarta prioridade: Escudos preventivos gerais
     return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.pestShield < 3) || null
   }
 
   if (type === 'collector') {
+    if (currentDrone.carrying) {
+      return findClosestRefinery(currentDrone)
+    }
     return state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested && !isAlreadyTargeted(t)) ||
            state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested) || null
   }
@@ -377,22 +428,28 @@ function findBestTask(type, currentDrone) {
 }
 
 function pickTargetTile(drone) {
-  const task = findBestTask(drone.type, drone)
-  if (task) {
+  const target = findBestTask(drone.type, drone)
+  if (target) {
     drone.patrolTarget = null 
-    return task
+    return target
   }
   
+  if (drone.type === 'collector' && drone.carrying) {
+    return null 
+  }
+
   if (drone.patrolTarget && (drone.x !== drone.patrolTarget.x || drone.y !== drone.patrolTarget.y)) {
     const isStillValid = state.tiles.some(t => t.x === drone.patrolTarget.x && t.y === drone.patrolTarget.y)
     if (isStillValid) return drone.patrolTarget
   }
 
-  // Patrulha distribuída aleatoriamente para evitar que drones ociosos travem sobrepostos
   if (state.tiles.length > 0) {
-    const untargetedTiles = state.tiles.filter(t => !state.drones.some(d => d.id !== drone.id && d.targetX === t.x && d.targetY === t.y))
-    const pool = untargetedTiles.length > 0 ? untargetedTiles : state.tiles
-    const randomTile = pool[Math.floor(Math.random() * pool.length)]
+    const validTiles = state.tiles.filter(t => !getChargerAt(t.x, t.y) && !getRefineryAt(t.x, t.y))
+    const pool = validTiles.length > 0 ? validTiles : state.tiles
+    const untargetedTiles = pool.filter(t => !state.drones.some(d => d.id !== drone.id && d.targetX === t.x && d.targetY === t.y))
+    const finalPool = untargetedTiles.length > 0 ? untargetedTiles : pool
+    
+    const randomTile = finalPool[Math.floor(Math.random() * finalPool.length)]
     drone.patrolTarget = randomTile
     return randomTile
   }
@@ -421,7 +478,9 @@ function moveDroneToward(drone, tx, ty) {
   syncDronePosition(drone)
 }
 
-function applyTileEffects(tile, type) {
+function applyTileEffects(tile, drone) {
+  const type = drone.type
+
   if (type === 'planter') {
     tile.planted = true
     tile.growth = 1
@@ -454,23 +513,14 @@ function applyTileEffects(tile, type) {
   }
 
   if (type === 'collector') {
-    const base = 12 + state.upgrades.luck * 2
-    const bonus = Math.floor(rand(0, 6 + state.upgrades.luck))
-    const payout = base + bonus
-
-    state.food += 1
-    state.money += payout
-    state.production += payout
-    state.harvestLog.push(performance.now())
-
+    drone.carrying = true
     tile.planted = false
     tile.growth = 0
     tile.waterBoost = 0
     tile.pestShield = 0
     tile.infested = false
     updateTileVisual(tile)
-
-    log(`Colheita feita em ${getCoordStr(tile.x, tile.y)}. +$${payout}`)
+    log(`📦 Coletor extraiu matéria-prima em ${getCoordStr(tile.x, tile.y)}. Buscando Refinaria...`)
   }
 }
 
@@ -488,26 +538,23 @@ function droneLoop() {
       drone.battery = clamp(drone.battery + 0.12, 0, 100)
       updateDroneBattery(drone)
       updateChargerVisual(charger)
-      
-      if (drone.element) {
-        drone.element.classList.add('charging')
-      }
+      if (drone.element) drone.element.classList.add('charging')
       return
     } else if (charger) {
       charger.chargingDrone = null
       updateChargerVisual(charger)
     }
 
-    if (drone.element) {
-      drone.element.classList.remove('charging')
-    }
+    if (drone.element) drone.element.classList.remove('charging')
 
     const target = pickTargetTile(drone)
-    if (!target) return
+    if (!target) {
+      if (drone.element) drone.element.classList.remove('busy', 'tasking')
+      return
+    }
 
     drone.targetX = target.x
     drone.targetY = target.y
-
     const atTarget = drone.x === target.x && drone.y === target.y
 
     if (drone.element) {
@@ -524,45 +571,48 @@ function droneLoop() {
     drone.battery = clamp(drone.battery + 0.06, 0, 100)
     updateDroneBattery(drone)
 
-    if (drone.type === 'planter' && !target.planted && target.growth <= 0) {
-      applyTileEffects(target, 'planter')
+    if (drone.type === 'planter' && !target.planted && target.growth <= 0 && !getRefineryAt(target.x, target.y)) {
+      applyTileEffects(target, drone)
     }
-
     if (drone.type === 'water' && target.planted && target.growth > 0 && target.growth < 100) {
-      applyTileEffects(target, 'water')
+      applyTileEffects(target, drone)
     }
-
     if (drone.type === 'pesticide' && target.planted && (target.infested || (target.growth > 0 && target.growth < 100))) {
-      applyTileEffects(target, 'pesticide')
+      applyTileEffects(target, drone)
     }
-
-    if (drone.type === 'collector' && target.planted && target.growth >= 100) {
-      applyTileEffects(target, 'collector')
+    if (drone.type === 'collector') {
+      if (!drone.carrying && target.planted && target.growth >= 100) {
+        applyTileEffects(target, drone)
+      } else if (drone.carrying) {
+        const refinery = getRefineryAt(drone.x, drone.y)
+        if (refinery) {
+          refinery.buffer += 1
+          drone.carrying = false
+          updateRefineryVisual(refinery)
+          log(`🏭 Depósito feito! Fábrica ${getCoordStr(refinery.x, refinery.y)} recebeu insumos brutos.`)
+        }
+      }
     }
   })
 }
 
-// --- SISTEMA DINÂMICO DE SURGIMENTO DE PRAGAS ESCALÁVEL ---
 function cropLoop() {
   const weather = getWeatherData()
-
-  // Calcula o total de upgrades comprados pelo jogador para medir o avanço dele
   const totalUpgrades = state.upgrades.speed + state.upgrades.battery + state.upgrades.luck
-  
-  // No começo (0 upgrades), a chance é mínima (0.0005). A cada upgrade ela aumenta em 0.0015
   const dynamicPestChance = 0.0005 + (totalUpgrades * 0.0015)
 
   state.tiles.forEach(tile => {
+    if (getChargerAt(tile.x, tile.y) || getRefineryAt(tile.x, tile.y)) return
+
     if (!tile.planted) {
       updateTileVisual(tile)
       return
     }
 
-    // Gerador de Pragas Aleatórias Dinâmico baseado nas melhorias do jogador
     if (!tile.infested && tile.pestShield <= 0 && tile.growth > 5) {
       if (Math.random() < dynamicPestChance * weather.pest) { 
         tile.infested = true
-        log(`⚠️ Praga detectada em ${getCoordStr(tile.x, tile.y)}! O progresso está caindo!`)
+        log(`⚠️ Praga detectada em ${getCoordStr(tile.x, tile.y)}!`)
       }
     }
 
@@ -570,7 +620,6 @@ function cropLoop() {
     const growthSpeed = 0.12 * weather.growth * waterFactor
 
     if (tile.infested) {
-      // Se infectada, a barra de progresso diminui ao invés de aumentar
       tile.growth = clamp(tile.growth - growthSpeed * 1.5, 0, 100)
     } else {
       tile.growth = clamp(tile.growth + growthSpeed, 0, 100)
@@ -578,15 +627,36 @@ function cropLoop() {
 
     tile.waterBoost = Math.max(0, tile.waterBoost - 0.012 * weather.water)
     tile.pestShield = Math.max(0, tile.pestShield - 0.01 * weather.pest)
-
     updateTileVisual(tile)
+  })
+}
+
+function refineryProcessingLoop() {
+  state.refineryTick++
+  if (state.refineryTick % 15 !== 0) return
+
+  state.refineries.forEach(ref => {
+    if (ref.buffer > 0) {
+      ref.buffer--
+      const base = 42 + state.upgrades.luck * 4
+      const bonus = Math.floor(rand(0, 16 + state.upgrades.luck * 2))
+      const payout = base + bonus
+
+      state.food += 1
+      state.money += payout
+      state.production += payout
+      state.harvestLog.push(performance.now())
+
+      updateRefineryVisual(ref)
+      log(`🥫 Processador produziu: Alimento Manufaturado! +$${payout}`)
+    }
   })
 }
 
 function productionLoop() {
   const now = performance.now()
   state.harvestLog = state.harvestLog.filter(t => now - t < 60000)
-  state.production = state.harvestLog.length * 12
+  state.production = state.harvestLog.length * 15
 }
 
 function weatherLoop() {
@@ -613,10 +683,14 @@ function updateUI() {
   safeText(elCountPesticide, state.droneCounts.pesticide)
   safeText(elCountCollector, state.droneCounts.collector)
   safeText(elCountCharger, state.droneCounts.charger)
+  safeText(elCountRefinery, state.droneCounts.refinery)
 
   if (btnUpgradeSpeed) btnUpgradeSpeed.disabled = state.money < prices.speed
   if (btnUpgradeBattery) btnUpgradeBattery.disabled = state.money < prices.battery
   if (btnUpgradeLuck) btnUpgradeLuck.disabled = state.money < prices.luck
+  
+  const btnPlaceRefinery = document.getElementById('placeRefinery')
+  if (btnPlaceRefinery) btnPlaceRefinery.disabled = state.money < prices.refinery
   if (btnExpandFarm) btnExpandFarm.disabled = state.money < prices.farmExpand || state.gridSize >= 16
 
   document.querySelectorAll('[data-buy]').forEach(btn => {
@@ -624,19 +698,12 @@ function updateUI() {
     btn.disabled = state.money < prices[type]
   })
 
-  const expandBtn = document.getElementById('expandFarm')
-  if (expandBtn) {
-    expandBtn.disabled = state.money < prices.farmExpand || state.gridSize >= 16
-  }
   const expandPrice = document.getElementById('expandPrice')
-  if (expandPrice) {
-    expandPrice.textContent = `$${Math.floor(prices.farmExpand)}`
-  }
+  if (expandPrice) expandPrice.textContent = `$${Math.floor(prices.farmExpand)}`
 }
 
 function buyDrone(type) {
   if (state.money < prices[type]) return
-
   state.money -= prices[type]
   state.droneCounts[type] += 1
   spawnDrone(type)
@@ -644,29 +711,21 @@ function buyDrone(type) {
   updateUI()
 }
 
+// ... (Funções de Upgrade e Expansão continuam iguais e limpas)
 function buyUpgrade(type) {
   const price = prices[type]
   if (state.money < price) return
-
   state.money -= price
   state.upgrades[type] += 1
-
-  if (type === 'speed') log('Upgrade de velocidade aplicado')
-  if (type === 'battery') log('Upgrade de bateria aplicado')
-  if (type === 'luck') log('Upgrade de colheita aplicado')
-
+  log(`Upgrade de ${type} aplicado`)
   updateUI()
 }
 
 function expandFarm() {
-  const price = prices.farmExpand
-  if (state.money < price) return
-  if (state.gridSize >= 16) return
-
-  state.money -= price
+  if (state.money < prices.farmExpand || state.gridSize >= 16) return
+  state.money -= prices.farmExpand
   state.gridSize += 2
   prices.farmExpand = Math.floor(prices.farmExpand * 1.35)
-
   log(`Fazenda expandida para ${state.gridSize}x${state.gridSize}!`)
   initFarm()
   resizeDrones()
@@ -674,60 +733,58 @@ function expandFarm() {
 }
 
 function placeCharger() {
-  const msg = `Digite as coordenadas da estação usando letras (ex: a1b1 para canto superior esquerdo). Máximo: a${state.gridSize}b${state.gridSize}`
-  const input = prompt(msg)
-  
-  if (!input) return
-  
+  const input = prompt(`Coordenadas da recarga (ex: a1b1). Limite: a${state.gridSize}b${state.gridSize}`)
   const coords = parseCoordStr(input)
-  if (!coords) {
-    log('❌ Formato inválido! Use o padrão de letras, ex: a2b3')
-    return
-  }
+  if (!coords || state.money < prices.charger) return
   const { x, y } = coords
-  
-  if (x < 0 || y < 0 || x >= state.gridSize || y >= state.gridSize) {
-    log('❌ Coordenadas fora do limite do mapa atual!')
-    return
-  }
-  
-  if (getChargerAt(x, y)) {
-    log('❌ Já existe uma estação aqui!')
-    return
-  }
+  if (getChargerAt(x, y) || x >= state.gridSize || y >= state.gridSize) return
 
-  if (state.money < prices.charger) {
-    log('❌ Dinheiro insuficiente!')
-    return
-  }
-  
   state.money -= prices.charger
   state.droneCounts.charger += 1
   spawnCharger(x, y)
-  log(`Estação colocada em ${getCoordStr(x, y)}`)
   updateUI()
 }
 
 function removeCharger() {
-  const msg = `Digite as coordenadas da estação a remover (ex: a1b1)`
-  const input = prompt(msg)
-  
-  if (!input) return
-  
+  const input = prompt('Coordenadas da estação de recarga a remover:')
   const coords = parseCoordStr(input)
-  if (!coords) {
-    log('❌ Formato inválido! Use o padrão de letras, ex: a1b1')
-    return
-  }
+  if (!coords) return
+  removeChargerAt(coords.x, coords.y)
+  if (state.droneCounts.charger > 0) state.droneCounts.charger -= 1
+  updateUI()
+}
+
+function placeRefinery() {
+  const input = prompt(`Coordenadas da Refinaria (ex: a1b1). Limite: a${state.gridSize}b${state.gridSize}`)
+  const coords = parseCoordStr(input)
+  if (!coords) { log('❌ Coordenadas inválidas!'); return }
   const { x, y } = coords
   
-  if (getChargerAt(x, y)) {
-    removeChargerAt(x, y)
-    if (state.droneCounts.charger > 0) state.droneCounts.charger -= 1
-    log(`Estação removida de ${getCoordStr(x, y)}`)
+  if (x < 0 || y < 0 || x >= state.gridSize || y >= state.gridSize) return
+  if (getRefineryAt(x, y)) return
+  if (state.money < prices.refinery) return
+  
+  state.money -= prices.refinery
+  state.droneCounts.refinery += 1
+  
+  const tile = getTileAt(x, y)
+  if (tile) { tile.planted = false; tile.growth = 0; }
+  
+  spawnRefinery(x, y)
+  log(`⚙️ Refinaria instalada e ativa no quadrante ${getCoordStr(x, y)}`)
+  updateUI()
+}
+
+function removeRefinery() {
+  const input = prompt('Coordenadas da refinaria a remover:')
+  const coords = parseCoordStr(input)
+  if (!coords) return
+  
+  if (getRefineryAt(coords.x, coords.y)) {
+    removeRefineryAt(coords.x, coords.y)
+    if (state.droneCounts.refinery > 0) state.droneCounts.refinery -= 1
+    log(`Refinaria removida de ${getCoordStr(coords.x, coords.y)}`)
     updateUI()
-  } else {
-    log('❌ Nenhuma estação encontrada nessa posição.')
   }
 }
 
@@ -747,6 +804,13 @@ function initEvents() {
   const btnRemoveCharger = document.getElementById('removeCharger')
   if (btnRemoveCharger) btnRemoveCharger.addEventListener('click', removeCharger)
 
+  // Seletores nativos agora que os elementos estão no HTML de verdade!
+  const btnPlaceRefinery = document.getElementById('placeRefinery')
+  if (btnPlaceRefinery) btnPlaceRefinery.addEventListener('click', placeRefinery)
+
+  const btnRemoveRefinery = document.getElementById('removeRefinery')
+  if (btnRemoveRefinery) btnRemoveRefinery.addEventListener('click', removeRefinery)
+
   if (dronesLayer) {
     dronesLayer.addEventListener('mousedown', (e) => {
       const droneEl = e.target.closest('.drone')
@@ -755,9 +819,7 @@ function initEvents() {
         if (drone) {
           state.selectedDrone = drone
           state.mouseDown = true
-          if (drone.element) {
-            drone.element.classList.add('selected')
-          }
+          if (drone.element) drone.element.classList.add('selected')
         }
       }
     })
@@ -769,37 +831,24 @@ function initEvents() {
       }
     })
 
-    dronesLayer.addEventListener('mouseup', () => {
-      if (state.selectedDrone && state.selectedDrone.element) {
-        state.selectedDrone.element.classList.remove('selected')
-      }
+    const clearSelection = () => {
+      if (state.selectedDrone && state.selectedDrone.element) state.selectedDrone.element.classList.remove('selected')
       state.selectedDrone = null
       state.mouseDown = false
-    })
+    }
 
-    document.addEventListener('mouseleave', () => {
-      if (state.selectedDrone && state.selectedDrone.element) {
-        state.selectedDrone.element.classList.remove('selected')
-      }
-      state.selectedDrone = null
-      state.mouseDown = false
-    })
+    dronesLayer.addEventListener('mouseup', clearSelection)
+    document.addEventListener('mouseleave', clearSelection)
   }
 }
 
 function seedStart() {
-  const seeds = [
-    [1, 1], [2, 2], [3, 1], [5, 2], [1, 5], [4, 4]
-  ]
-
+  const seeds = [[1, 1], [2, 2], [3, 1], [5, 2], [1, 5], [4, 4]]
   for (const [x, y] of seeds) {
     const tile = getTileAt(x, y)
     if (!tile) continue
     tile.planted = true
     tile.growth = rand(12, 28)
-    tile.waterBoost = 0
-    tile.pestShield = 0
-    tile.infested = false
     updateTileVisual(tile)
   }
 }
@@ -823,21 +872,19 @@ function initGame() {
   state.droneCounts.collector = 1
   state.droneCounts.pesticide = 1
 
-  log('Fazenda ligada')
-  log('Os drones já começaram a rodar')
-  log('💡 Clique e segure em um drone para carregá-lo!')
+  log('Fazenda industrializada com sucesso.')
   updateUI()
 }
 
 function gameTick() {
   cropLoop()
   droneLoop()
+  refineryProcessingLoop()
   productionLoop()
   weatherLoop()
   updateUI()
 }
 
 window.addEventListener('resize', resizeDrones)
-
 initGame()
 setInterval(gameTick, 100)
