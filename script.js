@@ -24,7 +24,8 @@ const btnUpgradeBattery = document.getElementById('upgradeBattery')
 const btnUpgradeLuck = document.getElementById('upgradeLuck')
 const btnExpandFarm = document.getElementById('expandFarm')
 
-const UPGRADE_MAX = 10
+const MAX_GRID_SIZE = 16
+const UPGRADE_MAX = 5
 
 // --- TIPOS DE CULTURA ---
 const CROPS = {
