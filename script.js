@@ -871,18 +871,27 @@ function buyDrone(type) {
   updateUI()
 }
 function buyUpgrade(type) {
-  if (state.upgrades[type] >= UPGRADE_MAX) { log(`❌ ${type} já está no MAX!`); return }
-  const price = upgradePrice(type)
-  if (state.money < price) return
-  state.money -= price; state.upgrades[type]++
-  log(`⬆️ ${type} nível ${state.upgrades[type]}/${UPGRADE_MAX}`); updateUI()
+    if (state.upgrades[type] >= UPGRADE_MAX) {
+        log(`Upgrade ${type} já no máximo!`)
+        return
+    }
+    const price = upgradePrice(type)
+    if (state.money >= price) {
+        state.money -= price
+        state.upgrades[type] = Math.min(state.upgrades[type] + 1, UPGRADE_MAX)
+        updateUI()
+        log(`Upgrade ${type} comprado!`)
+    }
 }
 function expandFarm() {
-  if (state.money < prices.farmExpand || state.gridSize >= 16) return
-  state.money -= prices.farmExpand; state.gridSize += 2
-  prices.farmExpand = Math.floor(prices.farmExpand*1.35)
-  log(`Fazenda expandida para ${state.gridSize}x${state.gridSize}!`)
-  initFarm(); resizeDrones(); updateUI()
+    if (state.money < prices.farmExpand || state.gridSize >= MAX_GRID_SIZE) return
+    state.money -= prices.farmExpand
+    state.gridSize += 2
+    prices.farmExpand = Math.floor(prices.farmExpand * 1.35)
+    log(`Fazenda expandida para ${state.gridSize}x${state.gridSize}!`)
+    initFarm()
+    resizeDrones()
+    updateUI()
 }
 function placeCharger() {
   const input = prompt(`Coordenadas da estação (ex: a1b1). Limite: a${state.gridSize}b${state.gridSize}`)
