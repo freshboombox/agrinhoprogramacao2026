@@ -781,6 +781,56 @@ function injectCropSelector() {
   // Per-drone assignment button
   document.getElementById('btnAssignCrop').addEventListener('click', assignCropToPlanter)
 }
+
+// --- REFINERY + ROUTE UI ---
+function injectRefineryUI() {
+  if (document.getElementById('placeRefinery')) return
+  const btnPlaceCharger = document.getElementById('placeCharger')
+  if (!btnPlaceCharger) return
+
+  const btnPlace = document.createElement('button')
+  btnPlace.id = 'placeRefinery'; btnPlace.className = btnPlaceCharger.className; btnPlace.style.margin='4px'
+  btnPlace.innerHTML = '⚙️ Criar Refinaria (<span id="refineryPrice">$150</span>)'
+
+  const btnRemove = document.createElement('button')
+  btnRemove.id = 'removeRefinery'; btnRemove.className = btnPlaceCharger.className; btnRemove.style.margin='4px'
+  btnRemove.textContent = '🔥 Remover Refinaria'
+
+  const btnRoute = document.createElement('button')
+  btnRoute.id = 'defineRoute'; btnRoute.className = btnPlaceCharger.className; btnRoute.style.margin='4px'
+  btnRoute.style.background = 'linear-gradient(180deg,#ffcc80,#e67e22)'; btnRoute.style.color='#1a0d00'
+  btnRoute.textContent = '🛣️ Definir rota de coletor'
+
+  const btnDelRoute = document.createElement('button')
+  btnDelRoute.id = 'deleteRoute'; btnDelRoute.className = btnPlaceCharger.className; btnDelRoute.style.margin='4px'
+  btnDelRoute.style.background = 'linear-gradient(180deg,#ff9999,#e74c3c)'; btnDelRoute.style.color='#fff'
+  btnDelRoute.textContent = '🗑️ Remover rota'
+
+  const labelCount = document.createElement('div')
+  labelCount.style.cssText = 'font-size:12px;margin:4px 0;'
+  labelCount.innerHTML = `Fábricas Ativas: <strong id="count-refinery" style="color:#e67e22">0</strong>`
+
+  const parent = btnPlaceCharger.parentElement
+  parent.insertBefore(btnPlace,    btnPlaceCharger.nextSibling)
+  parent.insertBefore(btnRemove,   btnPlace.nextSibling)
+  parent.insertBefore(btnRoute,    btnRemove.nextSibling)
+  parent.insertBefore(btnDelRoute, btnRoute.nextSibling)
+  parent.appendChild(labelCount)
+
+  btnPlace.addEventListener('click', placeRefinery)
+  btnRemove.addEventListener('click', removeRefinery)
+  btnRoute.addEventListener('click', startRouteMode)
+  btnDelRoute.addEventListener('click', () => {
+    const collectors = state.drones.filter(d => d.type==='collector' && getRouteFor(d))
+    if (collectors.length===0) { log('❌ Nenhum coletor com rota definida.'); return }
+    const names = collectors.map((d,i)=>`${i+1}: Coletor #${d.id} (${getCoordStr(d.x,d.y)})`).join('\n')
+    const choice = parseInt(prompt(`Qual rota remover?\n${names}\nDigite o número:`))
+    const drone  = collectors[choice-1]
+    if (drone) removeRoute(drone.id)
+    else log('❌ Escolha inválida.')
+  })
+}
+
 // --- UPDATE UI ---
 function updateUI() {
   const weather = getWeatherData()
