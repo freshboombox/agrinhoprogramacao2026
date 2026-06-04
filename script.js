@@ -404,100 +404,83 @@ function spawnDrone(type) {
 }
 
 // --- TASK LOGIC ---
+// ── PATCH 1: findBestTask ── remove the carrying→refinery early-return
 function findBestTask(type, drone) {
-  const targeted = (t) => state.drones.some(d => d.id!==drone.id && d.type===type && d.targetX===t.x && d.targetY===t.y)
-  const route = getRouteFor(drone)
+  const targeted = (t) => state.drones.some(d => d.id !== drone.id && d.type === type && d.targetX === t.x && d.targetY === t.y)
 
   if (type === 'planter')
-    return state.tiles.find(t => !t.planted && t.growth<=0 && !getChargerAt(t.x,t.y) && !getRefineryAt(t.x,t.y) && !targeted(t)) ||
-           state.tiles.find(t => !t.planted && t.growth<=0 && !getChargerAt(t.x,t.y) && !getRefineryAt(t.x,t.y)) || null
+    return state.tiles.find(t => !t.planted && t.growth <= 0 && !getChargerAt(t.x, t.y) && !targeted(t)) ||
+           state.tiles.find(t => !t.planted && t.growth <= 0 && !getChargerAt(t.x, t.y)) || null
 
   if (type === 'water')
-    return state.tiles.find(t => t.planted && t.growth>0 && t.growth<100 && t.waterBoost<4 && !t.infested && !targeted(t)) ||
-           state.tiles.find(t => t.planted && t.growth>0 && t.growth<100 && t.waterBoost<4 && !t.infested) || null
+    return state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.waterBoost < 4 && !t.infested && !targeted(t)) ||
+           state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.waterBoost < 4 && !t.infested) || null
 
   if (type === 'pesticide')
     return state.tiles.find(t => t.planted && t.infested && !targeted(t)) ||
            state.tiles.find(t => t.planted && t.infested) ||
-           state.tiles.find(t => t.planted && t.growth>0 && t.growth<100 && t.pestShield<3 && !targeted(t)) ||
-           state.tiles.find(t => t.planted && t.growth>0 && t.growth<100 && t.pestShield<3) || null
+           state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.pestShield < 3 && !targeted(t)) ||
+           state.tiles.find(t => t.planted && t.growth > 0 && t.growth < 100 && t.pestShield < 3) || null
 
-  if (type === 'collector') {
-    if (drone.carrying) return findClosestRefinery(drone)
-    if (route) {
-      const fromTile = getTileAt(route.fromX, route.fromY)
-      if (fromTile && fromTile.planted && fromTile.growth >= 100 && !fromTile.infested) return fromTile
-      return null
-    }
-    return state.tiles.find(t => t.planted && t.growth>=100 && !t.infested && !targeted(t)) ||
-           state.tiles.find(t => t.planted && t.growth>=100 && !t.infested) || null
-  }
+  if (type === 'collector')
+    return state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested && !targeted(t)) ||
+           state.tiles.find(t => t.planted && t.growth >= 100 && !t.infested) || null
+
   return null
 }
 
+// ── PATCH 2: pickTargetTile ── remove the carrying/route early-returns
 function pickTargetTile(drone) {
   const target = findBestTask(drone.type, drone)
   if (target) { drone.patrolTarget = null; return target }
-  if (drone.type === 'collector' && drone.carrying)      return null
-  if (drone.type === 'collector' && getRouteFor(drone))  return null
 
   if (drone.patrolTarget) {
-    const still = state.tiles.some(t => t.x===drone.patrolTarget.x && t.y===drone.patrolTarget.y)
+    const still = state.tiles.some(t => t.x === drone.patrolTarget.x && t.y === drone.patrolTarget.y)
     if (still && (drone.x !== drone.patrolTarget.x || drone.y !== drone.patrolTarget.y)) return drone.patrolTarget
   }
 
-  const valid      = state.tiles.filter(t => !getChargerAt(t.x,t.y) && !getRefineryAt(t.x,t.y))
+  const valid      = state.tiles.filter(t => !getChargerAt(t.x, t.y))
   const pool       = valid.length > 0 ? valid : state.tiles
-  const untargeted = pool.filter(t => !state.drones.some(d => d.id!==drone.id && d.targetX===t.x && d.targetY===t.y))
+  const untargeted = pool.filter(t => !state.drones.some(d => d.id !== drone.id && d.targetX === t.x && d.targetY === t.y))
   const final      = untargeted.length > 0 ? untargeted : pool
-  drone.patrolTarget = final[Math.floor(Math.random()*final.length)]
+  drone.patrolTarget = final[Math.floor(Math.random() * final.length)]
   return drone.patrolTarget
 }
 
-function moveDroneToward(drone, tx, ty) {
-  if (drone.moveCooldown > 0) return
-  const dx = tx-drone.x, dy = ty-drone.y
-  if (dx===0 && dy===0) return
-  const step = Math.max(1, Math.round(1+state.upgrades.speed*0.2))
-  if (Math.abs(dx) >= Math.abs(dy)) drone.x += Math.sign(dx)*Math.min(step,Math.abs(dx))
-  else                               drone.y += Math.sign(dy)*Math.min(step,Math.abs(dy))
-  const weather = getWeatherData()
-  drone.battery = clamp(drone.battery - 0.08*weather.battery, 0, 100)
-  drone.moveCooldown = Math.max(0, 5-state.upgrades.speed)
-  syncDronePosition(drone)
-}
-
+// ── PATCH 3: applyTileEffects ── collector sells immediately, does NOT set carrying = true
 function applyTileEffects(tile, drone) {
   const type = drone.type
 
   if (type === 'planter') {
-    // ── use the drone's own cropType; fall back to global selectedCrop ──
-    const cropKey  = drone.cropType || selectedCrop
-    tile.planted   = true; tile.growth = 1; tile.waterBoost = 0
-    tile.pestShield = 0;   tile.infested = false
-    tile.cropType  = cropKey
+    const cropKey   = drone.cropType || selectedCrop
+    tile.planted    = true; tile.growth = 1; tile.waterBoost = 0
+    tile.pestShield = 0;    tile.infested = false
+    tile.cropType   = cropKey
     updateTileVisual(tile)
-    log(`Plantio de ${CROPS[cropKey].name} em ${getCoordStr(tile.x,tile.y)}`)
+    log(`Plantio de ${CROPS[cropKey].name} em ${getCoordStr(tile.x, tile.y)}`)
     return
   }
   if (type === 'water') {
-    tile.waterBoost = Math.min(4, tile.waterBoost+2)
-    updateTileVisual(tile); log(`Irrigação em ${getCoordStr(tile.x,tile.y)}`); return
+    tile.waterBoost = Math.min(4, tile.waterBoost + 2)
+    updateTileVisual(tile); log(`Irrigação em ${getCoordStr(tile.x, tile.y)}`); return
   }
   if (type === 'pesticide') {
-    if (tile.infested) { tile.infested=false; tile.pestShield=3; log(`✨ Praga eliminada em ${getCoordStr(tile.x,tile.y)}!`) }
-    else               { tile.pestShield=Math.min(3,tile.pestShield+2); log(`🛡️ Proteção em ${getCoordStr(tile.x,tile.y)}`) }
+    if (tile.infested) { tile.infested = false; tile.pestShield = 3; log(`✨ Praga eliminada em ${getCoordStr(tile.x, tile.y)}!`) }
+    else               { tile.pestShield = Math.min(3, tile.pestShield + 2); log(`🛡️ Proteção em ${getCoordStr(tile.x, tile.y)}`) }
     updateTileVisual(tile); return
   }
   if (type === 'collector') {
-    drone.carrying       = true
-    drone._carryingCrop  = tile.cropType || 'wheat'
-    tile.planted=false; tile.growth=0; tile.waterBoost=0; tile.pestShield=0; tile.infested=false
+    const crop  = CROPS[tile.cropType] || CROPS.wheat
+    const value = Math.floor(crop.value * (1 + state.upgrades.luck * 0.1))
+    state.money += value
+    state.food  += 1
+    state.harvestLog.push(performance.now())
+    tile.planted = false; tile.growth = 0; tile.waterBoost = 0; tile.pestShield = 0; tile.infested = false
     updateTileVisual(tile)
-    log(`📦 Coletor extraiu ${CROPS[drone._carryingCrop]?.name||'colheita'} em ${getCoordStr(tile.x,tile.y)}`)
+    log(`📦 ${crop.emoji} ${crop.name} colhido! +$${value}`)
+    updateUI()
   }
 }
-
 // --- COLHEITA MANUAL ---
 function handleTileClick(e) {
   const tileEl = e.target.closest('.tile')
